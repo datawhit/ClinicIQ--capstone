@@ -4,6 +4,8 @@ Vite-based React application initialized in Replit.
 
 ## Setup
 1. Installed Node.js 22
-2. Manually initialized Vite with React (due to interactive prompt issues)
+2. Initialized Vite with React template
 3. Configured for Replit (allowedHosts: true, host: 0.0.0.0, port: 5000)
 4. Set up workflow for development (npm run dev)
+5. Integrated Anthropic Claude-3.5-Sonnet for AI-powered dental visit note parsing
+6. Configured `VITE_ANTHROPIC_API_KEY` project secret for AI functionality

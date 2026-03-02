@@ -314,19 +314,27 @@ export default function App() {
     setNlpLoading(true); setNlpError(""); setNlpParsed(null);
     try {
       const todayStr = new Date().toISOString().split("T")[0];
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+      
+      if (!apiKey || apiKey === "your_api_key_here") {
+        throw new Error("API Key not configured. Please add VITE_ANTHROPIC_API_KEY to Secrets.");
+      }
+
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01"
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "dangerously-allow-browser": "true"
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-3-5-sonnet-20240620",
           max_tokens: 1000,
           messages: [{
             role: "user",
-            content: `You are a dental clinic assistant. Today is ${todayStr}. Extract visit info from this note and return ONLY valid JSON, no markdown:
+            content: `You are a dental clinic assistant. Today is ${todayStr}. Extract visit info from this note and return ONLY valid JSON, no markdown. 
+Ensure the "discipline" matches one of the provided options exactly.
 {
   "date": "YYYY-MM-DD or empty string",
   "procedure": "procedure name or empty string",
@@ -338,6 +346,12 @@ Note: "${nlpInput}"`
           }]
         })
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "API request failed");
+      }
+
       const data = await response.json();
       const parsed = JSON.parse(data.content[0].text.trim());
       setNlpParsed(parsed);
@@ -345,7 +359,8 @@ Note: "${nlpInput}"`
       if (parsed.discipline && showLogModal) updateField(showLogModal, "discipline", parsed.discipline);
       if (parsed.nextAppt && showLogModal) updateField(showLogModal, "nextAppt", parsed.nextAppt);
     } catch (err) {
-      setNlpError("Couldn't parse that — please fill in the fields manually.");
+      console.error("AI Parsing Error:", err);
+      setNlpError(err.message || "Couldn't parse that — please fill in the fields manually.");
     }
     setNlpLoading(false);
   };
