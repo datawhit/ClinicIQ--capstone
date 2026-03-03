@@ -328,6 +328,7 @@ export default function App() {
           "anthropic-version": "2023-06-01",
           "dangerously-allow-browser": "true"
         },
+        mode: 'cors',
         body: JSON.stringify({
           model: "claude-3-5-sonnet-20240620",
           max_tokens: 1000,
