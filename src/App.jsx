@@ -313,48 +313,18 @@ export default function App() {
     if (!nlpInput.trim()) return;
     setNlpLoading(true); setNlpError(""); setNlpParsed(null);
     try {
-      const todayStr = new Date().toISOString().split("T")[0];
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || "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";
-      
-      if (!apiKey || apiKey === "your_api_key_here") {
-        throw new Error("API Key not configured. Please add VITE_ANTHROPIC_API_KEY to Secrets.");
-      }
-
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/parse-note", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "dangerously-allow-browser": "true"
-        },
-        mode: 'cors',
-        body: JSON.stringify({
-          model: "claude-3-5-sonnet-20240620",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: `You are a dental clinic assistant. Today is ${todayStr}. Extract visit info from this note and return ONLY valid JSON, no markdown. 
-Ensure the "discipline" matches one of the provided options exactly.
-{
-  "date": "YYYY-MM-DD or empty string",
-  "procedure": "procedure name or empty string",
-  "discipline": "one of: Comprehensive Care, Endodontics, Oral & Maxillofacial Surgery, Orthodontics, Pediatric Dentistry, Periodontics, Prosthodontics, Implant Dentistry, Dental Hygiene, Special Needs Dentistry, Oral Medicine & Pathology, General Dentistry",
-  "nextAppt": "YYYY-MM-DD calculated from today if follow-up timeframe mentioned, or empty string",
-  "notes": "additional notes or empty string"
-}
-Note: "${nlpInput}"`
-          }]
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: nlpInput }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || "API request failed");
+        throw new Error(errorData.error || "API request failed");
       }
 
-      const data = await response.json();
-      const parsed = JSON.parse(data.content[0].text.trim());
+      const parsed = await response.json();
       setNlpParsed(parsed);
       setNewVisit({ date: parsed.date || "", procedure: parsed.procedure || "", notes: parsed.notes || "" });
       if (parsed.discipline && showLogModal) updateField(showLogModal, "discipline", parsed.discipline);
