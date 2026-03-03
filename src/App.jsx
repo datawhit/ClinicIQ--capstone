@@ -314,7 +314,7 @@ export default function App() {
     setNlpLoading(true); setNlpError(""); setNlpParsed(null);
     try {
       const todayStr = new Date().toISOString().split("T")[0];
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || "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";
       
       if (!apiKey || apiKey === "your_api_key_here") {
         throw new Error("API Key not configured. Please add VITE_ANTHROPIC_API_KEY to Secrets.");
