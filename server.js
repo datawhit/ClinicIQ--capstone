@@ -57,6 +57,24 @@ Note: "${note}"`
   }
 });
 
+app.post('/api/parse', async (req, res) => {
+  try {
+    const { model, max_tokens, messages, system } = req.body;
+    const params = {
+      model: model || 'claude-sonnet-4-20250514',
+      max_tokens: max_tokens || 1000,
+      messages: messages || [],
+    };
+    if (system) params.system = system;
+
+    const message = await anthropic.messages.create(params);
+    res.json(message);
+  } catch (err) {
+    console.error('API Proxy Error:', err.message);
+    res.status(500).json({ error: err.message || 'Failed to process request' });
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'dist')));
 app.get('/{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
