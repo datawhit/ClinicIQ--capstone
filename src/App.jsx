@@ -1447,8 +1447,7 @@ RESPONSE RULES — follow these strictly:
                                 </div>
                               )}
                               {dayAppts.map((appt, ai) => <ApptChip key={ai} appt={appt} compact={false} />)}
-                              {!hasAppt && !isGrad && (
-                                {calCombinedView && (pairedApptMap[dateStr] || []).length > 0 && (
+                              {calCombinedView && (pairedApptMap[dateStr] || []).length > 0 && (
                                 <div>
                                   {(pairedApptMap[dateStr] || []).map((a, ai) => (
                                     <div key={"paired"+ai} style={{ background: "#e0f2fe", borderLeft: "3px solid #0ea5e9", borderRadius: 8, padding: "4px 8px", marginBottom: 3, fontSize: 11 }}>
@@ -1458,7 +1457,8 @@ RESPONSE RULES — follow these strictly:
                                   ))}
                                 </div>
                               )}
-                              <div style={{ fontSize: 10, color: NYU.gray200, fontStyle: "italic", marginTop: 4 }}>Available</div>
+                              {!hasAppt && !isGrad && !(calCombinedView && (pairedApptMap[dateStr] || []).length > 0) && (
+                                <div style={{ fontSize: 10, color: NYU.gray200, fontStyle: "italic", marginTop: 4 }}>Available</div>
                               )}
                             </div>
                           );
