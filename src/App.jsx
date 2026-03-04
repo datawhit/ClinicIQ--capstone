@@ -164,6 +164,28 @@ const predictCompletion = (patient) => {
   };
 };
 
+
+const DISCIPLINE_AVATAR = {
+  "Comprehensive Care":          { bg: "#e0f2fe", color: "#0369a1", initial: "CC" },
+  "Endodontics":                 { bg: "#fce7f3", color: "#9d174d", initial: "En" },
+  "Oral & Maxillofacial Surgery":{ bg: "#fee2e2", color: "#991b1b", initial: "OS" },
+  "Orthodontics":                { bg: "#fef3c7", color: "#92400e", initial: "Or" },
+  "Pediatric Dentistry":         { bg: "#dcfce7", color: "#166534", initial: "Pd" },
+  "Periodontics":                { bg: "#ede9fe", color: "#5b21b6", initial: "Pe" },
+  "Prosthodontics":              { bg: "#dbeafe", color: "#1e40af", initial: "Pr" },
+  "Implant Dentistry":           { bg: "#d1fae5", color: "#065f46", initial: "Im" },
+  "Dental Hygiene":              { bg: "#fef9c3", color: "#854d0e", initial: "Hy" },
+  "Special Needs Dentistry":     { bg: "#ffe4e6", color: "#9f1239", initial: "SN" },
+  "Oral Medicine & Pathology":   { bg: "#f3e8ff", color: "#6d28d9", initial: "OM" },
+  "General Dentistry":           { bg: "#e0f2fe", color: "#075985", initial: "GD" },
+};
+const HANDOFF_STATUSES = ["Unassigned", "Active - Shared", "Needs Partner", "Transitioning"];
+const HANDOFF_META = {
+  "Unassigned":       { color: NYU.gray400, bg: NYU.gray100 },
+  "Active - Shared":  { color: NYU.green,   bg: NYU.greenLight },
+  "Needs Partner":    { color: NYU.orange,  bg: NYU.orangeLight },
+  "Transitioning":    { color: NYU.blue,    bg: "#dbeafe" },
+};
 const LAB_STATUSES = ["None", "Pending", "Sent", "Received"];
 const PREAUTH_STATUSES = ["Not Submitted", "Submitted", "Approved", "Denied"];
 
@@ -239,11 +261,15 @@ const emptyPatient = {
   preAuth: "Not Submitted",
   notes: "",
   visitLog: [],
+  handoffStatus: "Unassigned",
+  handoffPartner: "",
+  handoffPartnerYear: "D3",
+  handoffNotes: "",
 };
 
 const initialPatients = [
   {
-    id: "PT-001",
+    id: "PT-001", handoffStatus: "Active - Shared", handoffPartner: "Marcus Reid", handoffPartnerYear: "D3", handoffNotes: "Crown placement still pending. Patient prefers morning appointments. Pre-auth approved.",
     chartNumber: "1047823",
     lastVisit: "2026-02-10",
     procedure: "Root Canal",
@@ -256,9 +282,13 @@ const initialPatients = [
     preAuth: "Approved",
     notes: "Patient responds well to treatment. Follow up on crown placement.",
     visitLog: [{ date: "2026-02-10", procedure: "Root Canal", notes: "Initial treatment complete." }],
+    handoffStatus: "Active - Shared",
+    handoffPartner: "Marcus Reid",
+    handoffPartnerYear: "D3",
+    handoffNotes: "Crown placement still pending. Patient prefers morning appointments. Pre-auth approved.",
   },
   {
-    id: "PT-002",
+    id: "PT-002", handoffStatus: "Unassigned", handoffPartner: "", handoffPartnerYear: "D3", handoffNotes: "",
     chartNumber: "1047824",
     lastVisit: "2026-01-15",
     procedure: "Crown Prep",
@@ -271,9 +301,13 @@ const initialPatients = [
     preAuth: "Submitted",
     notes: "Waiting on lab. Need to schedule follow-up appointment.",
     visitLog: [{ date: "2026-01-15", procedure: "Crown Prep", notes: "Sent to lab." }],
+    handoffStatus: "Unassigned",
+    handoffPartner: "",
+    handoffPartnerYear: "D3",
+    handoffNotes: "",
   },
   {
-    id: "PT-003",
+    id: "PT-003", handoffStatus: "Needs Partner", handoffPartner: "Priya Patel", handoffPartnerYear: "D3", handoffNotes: "Osseointegration monitoring ongoing. Next stage in April. Needs experienced provider.",
     chartNumber: "1047825",
     lastVisit: "2025-12-20",
     procedure: "Implant Placement",
@@ -286,9 +320,13 @@ const initialPatients = [
     preAuth: "Approved",
     notes: "Stage 1 complete. Monitoring osseointegration.",
     visitLog: [{ date: "2025-12-20", procedure: "Implant Placement", notes: "Stage 1 placed." }],
+    handoffStatus: "Needs Partner",
+    handoffPartner: "Priya Patel",
+    handoffPartnerYear: "D3",
+    handoffNotes: "Osseointegration monitoring ongoing. Next stage in April. Needs experienced provider.",
   },
   {
-    id: "PT-004",
+    id: "PT-004", handoffStatus: "Unassigned", handoffPartner: "", handoffPartnerYear: "D3", handoffNotes: "",
     chartNumber: "1047826",
     lastVisit: "2026-02-01",
     procedure: "Scaling & Root Planing",
@@ -301,9 +339,13 @@ const initialPatients = [
     preAuth: "Denied",
     notes: "Pre-auth denied — needs resubmission with additional documentation.",
     visitLog: [{ date: "2026-02-01", procedure: "Scaling & Root Planing", notes: "Pre-auth denied." }],
+    handoffStatus: "Unassigned",
+    handoffPartner: "",
+    handoffPartnerYear: "D3",
+    handoffNotes: "",
   },
   {
-    id: "PT-005",
+    id: "PT-005", handoffStatus: "Active - Shared", handoffPartner: "Jordan Kim", handoffPartnerYear: "D4", handoffNotes: "Post-op complete. Simple case — good for D3 handoff.",
     chartNumber: "1047827",
     lastVisit: "2026-01-05",
     procedure: "Extraction",
@@ -316,6 +358,10 @@ const initialPatients = [
     preAuth: "Not Submitted",
     notes: "Post-op healing well. No complications.",
     visitLog: [{ date: "2026-01-05", procedure: "Extraction", notes: "Healing well." }],
+    handoffStatus: "Active - Shared",
+    handoffPartner: "Jordan Kim",
+    handoffPartnerYear: "D4",
+    handoffNotes: "Post-op complete. Simple case — good for D3 handoff.",
   },
 ];
 
@@ -376,6 +422,27 @@ const css = `
   }
 `;
 
+const NoteCard = ({ note, active, onClick }) => {
+  const catColors = {
+    "Clinical": { color: "#0369a1", bg: "#e0f2fe" },
+    "Patient":  { color: "#6d28d9", bg: "#f3e8ff" },
+    "Study":    { color: "#065f46", bg: "#d1fae5" },
+    "General":  { color: "#92400e", bg: "#fef3c7" },
+  };
+  const cat = catColors[note.category] || catColors["General"];
+  return (
+    <div onClick={onClick} style={{ padding: "12px 14px", borderRadius: 12, marginBottom: 6, cursor: "pointer", background: active ? NYU.lavender : "white", border: `1px solid ${active ? NYU.gray200 : NYU.gray100}`, transition: "all 0.15s" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+        {note.pinned && <span style={{ fontSize: 10 }}>📌</span>}
+        <span style={{ fontSize: 10, fontWeight: 600, color: cat.color, background: cat.bg, borderRadius: 99, padding: "2px 8px" }}>{note.category}</span>
+        <span style={{ fontSize: 10, color: NYU.gray400, marginLeft: "auto" }}>{note.updatedAt}</span>
+      </div>
+      <div style={{ fontWeight: 600, fontSize: 13, color: NYU.gray900, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{note.title || "Untitled"}</div>
+      <div style={{ fontSize: 12, color: NYU.gray400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{note.body?.split("\n")[0] || "Empty note"}</div>
+    </div>
+  );
+};
+
 const Badge = ({ label, meta }) => (
   <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: "nowrap", letterSpacing: "0.02em" }}>
     {label}
@@ -405,6 +472,12 @@ export default function App() {
   const [filter, setFilter] = useState("All");
   const [tab, setTab] = useState("roster");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showPairedPanel, setShowPairedPanel] = useState(false);
+  const [showUrgentPanel, setShowUrgentPanel] = useState(false);
+  const [showRosterPanel, setShowRosterPanel] = useState(false);
+  const [showGoalsPanel, setShowGoalsPanel] = useState(false);
+  const [settingsDraft, setSettingsDraft] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPatient, setNewPatient] = useState(emptyPatient);
   const [showLogModal, setShowLogModal] = useState(null);
@@ -422,6 +495,28 @@ export default function App() {
   const [chatLoading, setChatLoading] = useState(false);
 
   // ── Custom Goals ──
+  // ── Notebook ──
+  const [notes, setNotes] = useState([
+    { id: "n1", title: "Pre-clinic checklist", body: "- Review patient charts\n- Check lab status for PT-1047824\n- Confirm pre-auth for PT-1047826", category: "Clinical", pinned: true, updatedAt: "2026-03-03" },
+    { id: "n2", title: "SRP technique notes", body: "Dr. Chen feedback: work on wrist angulation on posterior teeth. Practice on typodont Tuesday.", category: "Study", pinned: false, updatedAt: "2026-03-02" },
+    { id: "n3", title: "PT-1047823 reminder", body: "Patient mentioned financial concerns — be sensitive when discussing crown treatment plan. Consider phasing.", category: "Patient", pinned: false, updatedAt: "2026-03-01" },
+  ]);
+  const [activeNote, setActiveNote] = useState(null);
+  const [noteDraft, setNoteDraft] = useState(null);
+  const [noteSearch, setNoteSearch] = useState("");
+  const [calView, setCalView] = useState("week"); // "week" | "month"
+  const [calCombinedView, setCalCombinedView] = useState(false);
+  const [clinicSchedule, setClinicSchedule] = useState({
+    monday:    { enabled: true,  start: "08:00", end: "20:00" },
+    tuesday:   { enabled: true,  start: "08:00", end: "18:00" },
+    wednesday: { enabled: true,  start: "08:00", end: "20:00" },
+    thursday:  { enabled: true,  start: "08:00", end: "18:00" },
+    friday:    { enabled: true,  start: "08:00", end: "18:00" },
+    saturday:  { enabled: false, start: "09:00", end: "13:00" },
+    sunday:    { enabled: false, start: "09:00", end: "13:00" },
+  });
+  const [calDate, setCalDate] = useState(new Date());
+
   const [editingGoals, setEditingGoals] = useState(false);
   const [customGoals, setCustomGoals] = useState(
     DISCIPLINES.map((d, i) => ({ discipline: d, required: REQUIREMENTS[d]?.required || 5, visible: true, order: i }))
@@ -513,20 +608,49 @@ Note: "${nlpInput}"`
     setChatLoading(true);
 
     // Build velocity context
-    const velocityContext = `Graduation date: May 15 2026 (${daysToGraduation} days away). Current pace: ${visitsPerWeek.toFixed(1)} visits/week. Overall progress: ${totalCompleted}/${totalRequired} procedures (${velocityPct}%). ${onTrack ? "ON TRACK for graduation." : `AT RISK - projected to fall short by ${totalRemaining - projectedAdditional} procedures.`}${atRiskRequirements.length > 0 ? ` At-risk disciplines: ${atRiskRequirements.join(", ")}.` : ""}`;
+    const velocityContext = `Graduation date: ${graduationDateStr} (${daysToGraduation} days away). Current pace: ${visitsPerWeek.toFixed(1)} visits/week. Overall progress: ${totalCompleted}/${totalRequired} procedures (${velocityPct}%). ${onTrack ? "ON TRACK for graduation." : `AT RISK - projected to fall short by ${totalRemaining - projectedAdditional} procedures.`}${atRiskRequirements.length > 0 ? ` At-risk disciplines: ${atRiskRequirements.join(", ")}.` : ""}`;
 
-    // Build caseload context
+    // Build caseload context (include full visit log per patient)
     const caseloadSummary = patients.map(p => {
       const completed = p.visitLog?.length || 0;
       const goal = customGoals.find(g => g.discipline === p.discipline);
       const required = goal?.required || 0;
-      return `- ${p.chartNumber} (${p.id}): ${p.discipline}, ${completed} visits logged, last seen ${p.lastVisit || "never"}, procedure: ${p.procedure || "none"}, next appt: ${p.nextAppt || "not scheduled"}, pre-auth: ${p.preAuth}, status: ${calculateStatus(p)}`;
+      const visitHistory = (p.visitLog || []).map(v => `    • ${v.date}: ${v.procedure}${v.cdtCode ? ` (${v.cdtCode})` : ""}${v.notes ? ` — ${v.notes}` : ""}`).join("\n");
+      const pred = predictCompletion(p);
+      return `- ${p.chartNumber} (${p.id}): ${p.discipline}, ${completed}/${required} visits, last seen ${p.lastVisit || "never"}, next appt: ${p.nextAppt || "not scheduled"}, pre-auth: ${p.preAuth}, lab: ${p.labStatus}, status: ${calculateStatus(p)}${pred ? `, predicted completion: ${pred.date}` : ""}${visitHistory ? "\n  Visit history:\n" + visitHistory : ""}`;
     }).join("\n");
 
     const requirementsSummary = customGoals.filter(g => g.visible).map(g => {
       const completed = patients.filter(p => p.discipline === g.discipline).reduce((s, p) => s + (p.visitLog?.length || 0), 0);
       return `- ${g.discipline}: ${completed}/${g.required} complete`;
     }).join("\n");
+
+    // Build calendar context — upcoming appointments + suggested slots
+    const chatFmtDate = (d) => d.toISOString().split("T")[0];
+    const upcomingAppts = patients
+      .filter(p => p.nextAppt && p.nextAppt >= chatFmtDate(today))
+      .sort((a, b) => a.nextAppt.localeCompare(b.nextAppt))
+      .map(p => `- ${p.nextAppt}: ${p.chartNumber} (${p.procedure || p.discipline})`);
+    const suggestedSlots = patients
+      .filter(p => !p.treatmentComplete && !p.nextAppt)
+      .map(p => {
+        const pred = predictCompletion(p);
+        if (!pred || !p.lastVisit) return null;
+        const avgInterval = pred.avgInterval || 21;
+        const suggested = new Date(new Date(p.lastVisit).getTime() + avgInterval * 86400000);
+        return `- Suggested ~${chatFmtDate(suggested)}: Schedule ${p.chartNumber} (${p.discipline}, ${pred.visitsRemaining} visits remaining)`;
+      }).filter(Boolean);
+
+    // Build clinic schedule context
+    const scheduleContext = Object.entries(clinicSchedule)
+      .filter(([, s]) => s.enabled)
+      .map(([day, s]) => `${day}: ${s.start}–${s.end}`)
+      .join(", ");
+
+    // Build notebook context
+    const notebookContext = notes.map(n =>
+      `- [${n.category}${n.pinned ? " 📌" : ""}] "${n.title}" (${n.updatedAt}): ${n.body?.slice(0, 200)}${n.body?.length > 200 ? "..." : ""}`
+    ).join("\n");
 
     try {
       const response = await fetch("/api/parse", {
@@ -535,7 +659,10 @@ Note: "${nlpInput}"`
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
-          system: `You are ClinIQ, an AI assistant for dental students at NYU College of Dentistry. You help students manage their patient caseload and understand graduation requirements.
+          system: `You are ClinIQ, an AI assistant for dental students at NYU College of Dentistry. You help students manage their patient caseload, calendar, notes, and graduation requirements. Today's date is ${chatFmtDate(today)}.
+
+STUDENT PROFILE:
+Name: ${user?.name}, Year: ${user?.year}
 
 STUDENT'S CURRENT CASELOAD:
 ${caseloadSummary}
@@ -545,6 +672,18 @@ ${requirementsSummary}
 
 GRADUATION VELOCITY:
 ${velocityContext}
+
+UPCOMING APPOINTMENTS (from calendar):
+${upcomingAppts.length > 0 ? upcomingAppts.join("\n") : "No upcoming appointments scheduled."}
+
+SUGGESTED APPOINTMENT SLOTS:
+${suggestedSlots.length > 0 ? suggestedSlots.join("\n") : "No suggestions — all active patients have appointments scheduled."}
+
+CLINIC SCHEDULE:
+${scheduleContext || "No clinic days configured."}
+
+NOTEBOOK NOTES:
+${notebookContext || "No notes saved yet."}
 
 CDT CODE KNOWLEDGE:
 You understand ADA CDT codes and their discipline mappings:
@@ -607,7 +746,15 @@ DIAGNOSTIC (D0000s):
 - Full Mouth Series (D0210): 18-20 periapical and bitewing images. Required for comprehensive new patient exam.
 - Periodic Exam (D0120): Requires updated radiographs per ADA guidelines — bitewings annually for high-risk, every 18-36 months for low-risk patients.
 
-Your tone is conversational, warm, and direct — like a knowledgeable senior colleague texting quick advice, not a policy manual. Never use markdown headers, bold text, or bullet point lists. Write in plain flowing sentences. Keep responses under 120 words. Reference the student's actual caseload data when relevant. Use patient chart numbers when referring to specific patients. Pack in the key clinical details but make it feel like a helpful chat, not a document.`,
+RESPONSE RULES — follow these strictly:
+- Max 2-3 sentences for simple questions. Max 4-5 sentences for complex ones. Never more.
+- Never use bullet points, headers, bold, or lists of any kind. Plain sentences only.
+- Lead with the direct answer first, then add one line of context if needed. Never build up to the answer.
+- If referencing patients, use chart numbers only. Never describe the full patient record.
+- If asked about the calendar, give the date and patient — nothing else unless asked.
+- If asked about a note, quote the relevant part briefly — don't summarize the whole note.
+- Speak like a sharp colleague who respects your time. Confident, brief, useful.
+- If you don't have enough info to answer, say so in one sentence and suggest what to check.`,
           messages: [...chatMessages, userMsg].map(m => ({ role: m.role, content: m.content }))
         })
       });
@@ -666,7 +813,8 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
 
 
   // ── Graduation Velocity ──
-  const graduationDate = new Date("2026-05-15"); // estimated graduation
+  const [graduationDateStr, setGraduationDateStr] = useState("2026-05-15");
+  const graduationDate = new Date(graduationDateStr);
   const daysToGraduation = Math.floor((graduationDate - today) / 86400000);
   const weeksToGraduation = Math.max(1, Math.floor(daysToGraduation / 7));
 
@@ -762,11 +910,11 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
 
         {/* Top Header */}
         <div style={{ background: "white", borderBottom: `1px solid ${NYU.gray100}`, position: "sticky", top: 0, zIndex: 100 }}>
-          <div className="nav-inner" style={{ maxWidth: 1100, margin: "0 auto", padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 6, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" }}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "6px 8px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}
                 onMouseEnter={e => e.currentTarget.style.background = NYU.gray100}
                 onMouseLeave={e => e.currentTarget.style.background = "none"}
               >
@@ -779,28 +927,26 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
               <div style={{ width: 30, height: 30, borderRadius: 10, background: `linear-gradient(135deg, ${NYU.purple}, ${NYU.accent})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <span style={{ color: "white", fontSize: 14, fontWeight: 700 }}>C</span>
               </div>
-              <div>
-                <span style={{ color: NYU.gray900, fontSize: 16, fontWeight: 700, fontFamily: "'Fraunces', serif", letterSpacing: "-0.02em" }}>ClinIQ</span>
-              </div>
+              <span style={{ color: NYU.gray900, fontSize: 16, fontWeight: 700, fontFamily: "'Fraunces', serif", letterSpacing: "-0.02em" }}>ClinIQ</span>
 
               {menuOpen && (
                 <>
                   <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 199 }} />
-                  <div style={{ position: "absolute", top: 44, left: 0, background: "white", borderRadius: 14, boxShadow: "0 8px 32px rgba(87,6,140,0.15), 0 2px 8px rgba(0,0,0,0.06)", border: `1px solid ${NYU.gray100}`, width: 220, padding: "6px 0", zIndex: 200, animation: "slideUp 0.15s ease" }}>
+                  <div style={{ position: "absolute", top: 44, left: 0, background: "white", borderRadius: 14, boxShadow: "0 8px 32px rgba(87,6,140,0.15)", border: `1px solid ${NYU.gray100}`, width: 220, padding: "6px 0", zIndex: 200, animation: "slideUp 0.15s ease" }}>
                     {[
-                      { label: "Patient Roster", icon: "📋", action: () => { setTab("roster"); setMenuOpen(false); } },
-                      { label: "Graduation Requirements", icon: "🎓", action: () => { setTab("requirements"); setMenuOpen(false); } },
-                      { label: "Urgent Patients", icon: "⚠️", action: () => { setFilter("Urgent"); setTab("roster"); setMenuOpen(false); } },
+                      { label: "Patient Roster", icon: "📋", action: () => { setShowRosterPanel(true); setFilter("All"); setMenuOpen(false); window.scrollTo({top:0,behavior:"smooth"}); } },
+                      { label: "Graduation Goals", icon: "🎓", action: () => { setShowGoalsPanel(true); setMenuOpen(false); window.scrollTo({top:0,behavior:"smooth"}); } },
+                      { label: "Notebook", icon: "📓", action: () => { setTab("notebook"); setMenuOpen(false); window.scrollTo({top:0,behavior:"smooth"}); } },
+                      { label: "Calendar", icon: "📅", action: () => { setTab("calendar"); setMenuOpen(false); window.scrollTo({top:0,behavior:"smooth"}); } },
+                      { label: "Paired Provider View", icon: "🤝", action: () => { setShowPairedPanel(true); setMenuOpen(false); } },
+                      { label: "Urgent Patients", icon: "⚠️", action: () => { setTab("roster"); setFilter("Urgent"); setMenuOpen(false); setShowUrgentPanel(true); window.scrollTo({top:0,behavior:"smooth"}); } },
                     ].map((item, i) => (
-                      <button
-                        key={i}
-                        onClick={item.action}
-                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: NYU.gray900, fontFamily: "'Inter', sans-serif", textAlign: "left", transition: "background 0.1s" }}
+                      <button key={i} onClick={item.action}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: NYU.gray900, fontFamily: "'Inter', sans-serif", textAlign: "left" }}
                         onMouseEnter={e => e.currentTarget.style.background = NYU.gray50}
                         onMouseLeave={e => e.currentTarget.style.background = "none"}
                       >
-                        <span style={{ fontSize: 15 }}>{item.icon}</span>
-                        {item.label}
+                        <span style={{ fontSize: 15 }}>{item.icon}</span>{item.label}
                       </button>
                     ))}
                     <div style={{ height: 1, background: NYU.gray100, margin: "4px 12px" }} />
@@ -808,26 +954,29 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
                       { label: "Add Patient", icon: "➕", action: () => { setShowAddModal(true); setMenuOpen(false); } },
                       { label: "Export Roster", icon: "📥", action: () => { exportRoster(); setMenuOpen(false); } },
                     ].map((item, i) => (
-                      <button
-                        key={i}
-                        onClick={item.action}
-                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: NYU.gray900, fontFamily: "'Inter', sans-serif", textAlign: "left", transition: "background 0.1s" }}
+                      <button key={i} onClick={item.action}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: NYU.gray900, fontFamily: "'Inter', sans-serif", textAlign: "left" }}
                         onMouseEnter={e => e.currentTarget.style.background = NYU.gray50}
                         onMouseLeave={e => e.currentTarget.style.background = "none"}
                       >
-                        <span style={{ fontSize: 15 }}>{item.icon}</span>
-                        {item.label}
+                        <span style={{ fontSize: 15 }}>{item.icon}</span>{item.label}
                       </button>
                     ))}
                     <div style={{ height: 1, background: NYU.gray100, margin: "4px 12px" }} />
-                    <button
-                      onClick={() => { handleLogout(); setMenuOpen(false); }}
-                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: NYU.red, fontFamily: "'Inter', sans-serif", textAlign: "left", transition: "background 0.1s" }}
+                    <button onClick={() => { setSettingsDraft({ year: user.year, graduationDate: "2026-05-15", name: user.name }); setShowSettings(true); setMenuOpen(false); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: NYU.gray900, fontFamily: "'Inter', sans-serif", textAlign: "left" }}
                       onMouseEnter={e => e.currentTarget.style.background = NYU.gray50}
                       onMouseLeave={e => e.currentTarget.style.background = "none"}
                     >
-                      <span style={{ fontSize: 15 }}>🚪</span>
-                      Sign Out
+                      <span style={{ fontSize: 15 }}>⚙️</span>Settings
+                    </button>
+                    <div style={{ height: 1, background: NYU.gray100, margin: "4px 12px" }} />
+                    <button onClick={() => { handleLogout(); setMenuOpen(false); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: NYU.red, fontFamily: "'Inter', sans-serif", textAlign: "left" }}
+                      onMouseEnter={e => e.currentTarget.style.background = NYU.gray50}
+                      onMouseLeave={e => e.currentTarget.style.background = "none"}
+                    >
+                      <span style={{ fontSize: 15 }}>🚪</span>Sign Out
                     </button>
                   </div>
                 </>
@@ -835,6 +984,7 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 13, color: NYU.gray400 }}>{user?.year} · {user?.name}</span>
+              <button onClick={() => { setSettingsDraft({ year: user.year, graduationDate: graduationDateStr, name: user.name, clinicSchedule: JSON.parse(JSON.stringify(clinicSchedule)) }); setShowSettings(true); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 6, borderRadius: 8, color: NYU.gray400, fontSize: 16 }} title="Settings">⚙️</button>
               <button onClick={handleLogout} style={{ background: NYU.gray100, border: "none", borderRadius: 99, padding: "5px 14px", cursor: "pointer", color: NYU.gray600, fontSize: 12, fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>Sign Out</button>
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: NYU.lavender, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <span style={{ color: NYU.purple, fontSize: 13, fontWeight: 700 }}>{user?.name?.[0] || "?"}</span>
@@ -849,15 +999,17 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
           <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
             <div>
               <p style={{ color: NYU.gray400, fontSize: 13, marginBottom: 2 }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
-              <h1 style={{ fontSize: 22, fontWeight: 700, color: NYU.gray900, fontFamily: "'Fraunces', serif", letterSpacing: "-0.02em", lineHeight: 1.2 }}>My Caseload</h1>
+              <h1 style={{ fontSize: 22, fontWeight: 700, color: NYU.gray900, fontFamily: "'Fraunces', serif", letterSpacing: "-0.02em", lineHeight: 1.2 }}>{tab === "notebook" ? "Notebook" : tab === "requirements" ? "Graduation Goals" : tab === "calendar" ? "Calendar" : "My Caseload"}</h1>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="action-btn" onClick={exportRoster} style={{ background: NYU.gray100, color: NYU.gray600, fontSize: 12, padding: "8px 14px" }}>↓ Export</button>
-              <button className="action-btn" onClick={() => setShowAddModal(true)} style={{ background: NYU.purple, color: "white", fontSize: 12, padding: "8px 16px" }}>+ Add</button>
-            </div>
+            {tab !== "notebook" && tab !== "calendar" && (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="action-btn" onClick={exportRoster} style={{ background: NYU.gray100, color: NYU.gray600, fontSize: 12, padding: "8px 14px" }}>↓ Export</button>
+                <button className="action-btn" onClick={() => setShowAddModal(true)} style={{ background: NYU.purple, color: "white", fontSize: 12, padding: "8px 16px" }}>+ Add Patient</button>
+              </div>
+            )}
           </div>
 
-          {/* Stats */}
+          {tab !== "notebook" && tab !== "calendar" && <>{/* Stats */}
           <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 24 }}>
             {stats.map((s) => (
               <div key={s.label} style={{ background: "white", borderRadius: 14, padding: "18px 20px", border: `1px solid ${NYU.gray100}` }}>
@@ -868,7 +1020,9 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
           </div>
 
 
-          {/* Graduation Velocity Banner */}
+</>}
+
+          {tab !== "notebook" && tab !== "calendar" && <>{/* Graduation Velocity Banner */}
           <div className="card" style={{ padding: "20px 24px", marginBottom: 24, background: onTrack ? NYU.lavender : NYU.redLight, border: `1px solid ${onTrack ? NYU.gray200 : '#fecaca'}` }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
               <div style={{ flex: 1, minWidth: 220 }}>
@@ -899,7 +1053,9 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
             </div>
           </div>
 
-          {/* AI Insights Panel */}
+</>}
+
+          {tab !== "notebook" && tab !== "calendar" && <>{/* AI Insights Panel */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: NYU.gray600 }}>✦ AI Insights</span>
@@ -1004,9 +1160,11 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
             </div>
           )}
 
+</>}
+
           {/* Tab Nav */}
           <div style={{ borderBottom: `1.5px solid ${NYU.gray100}`, marginBottom: 24, display: "flex", gap: 0 }}>
-            {[["roster", "👤  Patient Roster"], ["requirements", "🎓  Graduation Goals"]].map(([key, label]) => (
+            {[["roster", "👤  Patient Roster"], ["requirements", "🎓  Graduation Goals"], ["calendar", "📅  Calendar"], ["notebook", "📓  Notebook"]].map(([key, label]) => (
               <button key={key} onClick={() => setTab(key)} style={{ background: "none", border: "none", borderBottom: tab === key ? `2px solid ${NYU.purple}` : "2px solid transparent", cursor: "pointer", fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: tab === key ? 600 : 400, padding: "10px 20px", marginBottom: -2, color: tab === key ? NYU.purple : NYU.gray400, transition: "all 0.15s" }}>{label}</button>
             ))}
           </div>
@@ -1033,15 +1191,14 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
                   const meta = STATUS_META[status] || { color: NYU.gray400, bg: NYU.gray100 };
                   const urgency = calculateUrgency(patient);
                   const daysToCompletion = daysUntil(patient.expectedCompletion);
-                  const avatarColors = ["#e0d4f7","#d4e8f7","#d4f7e0","#f7e8d4","#f7d4d4","#d4d4f7"];
-                  const avatarBg = avatarColors[(patient.chartNumber || '0').charCodeAt(0) % avatarColors.length];
+                  const avatarMeta = DISCIPLINE_AVATAR[patient.discipline] || { bg: NYU.lavender, color: NYU.purple, initial: "??" };
 
                   return (
                     <div key={patient.id} onClick={() => setDetailPatient(patient.id)} style={{ background: "white", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer", border: `1px solid ${urgency ? "#fed7aa" : NYU.gray100}`, transition: "all 0.18s", boxShadow: urgency ? "0 2px 12px rgba(194,65,12,0.08)" : "0 1px 3px rgba(107,33,168,0.05)" }}>
                       {/* Avatar */}
-                      <div style={{ width: 46, height: 46, borderRadius: "50%", background: avatarBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
-                        <span style={{ fontSize: 17, fontWeight: 700, color: NYU.purpleDark }}>{patient.chartNumber ? patient.chartNumber.slice(-2) : '?'}</span>
-                        {urgency && <div style={{ position: "absolute", top: 0, right: 0, width: 12, height: 12, borderRadius: "50%", background: NYU.orange, border: "2px solid white" }} />}
+                      <div style={{ width: 46, height: 46, borderRadius: 14, background: avatarMeta.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: avatarMeta.color, letterSpacing: "0.04em" }}>{avatarMeta.initial}</span>
+                        {urgency && <div style={{ position: "absolute", top: -2, right: -2, width: 10, height: 10, borderRadius: "50%", background: NYU.orange, border: "2px solid white" }} />}
                       </div>
                       {/* Info */}
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -1075,6 +1232,455 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
             </>
           )}
 
+
+          {/* CALENDAR TAB */}
+          {tab === "calendar" && (() => {
+
+            const PROCEDURE_DURATIONS = {
+              "Root Canal": 120, "Crown Prep": 90, "Implant Placement": 120,
+              "Scaling & Root Planing": 90, "Extraction": 60, "Cleaning": 60,
+              "Exam": 45, "Consultation": 30, "default": 60,
+            };
+
+            // ── helpers ──
+            const startOfWeek = (d) => {
+              const day = new Date(d);
+              const diff = day.getDate() - day.getDay() + (day.getDay() === 0 ? -6 : 1);
+              day.setDate(diff); day.setHours(0,0,0,0); return day;
+            };
+            const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+            const fmt = (d) => d.toISOString().split("T")[0];
+            const fmtDisplay = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+            const fmtMonth = (d) => d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+            const isToday = (d) => fmt(d) === fmt(new Date());
+            const isWeekend = (d) => d.getDay() === 0 || d.getDay() === 6;
+
+            const weekStart = startOfWeek(calDate);
+            const weekDays = [0,1,2,3,4,5,6].map(i => addDays(weekStart, i));
+
+            // ── Schedule helpers ──
+            const DAY_NAMES = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+            const todaySchedule = (d) => clinicSchedule[DAY_NAMES[d.getDay()]] || { enabled: false, start: "09:00", end: "17:00" };
+            const parseHour = (t) => parseInt(t.split(":")[0]);
+            const getSessionsForDay = (d) => {
+              const sched = todaySchedule(d);
+              if (!sched.enabled) return [];
+              const s = parseHour(sched.start);
+              const e = parseHour(sched.end);
+              const mid = Math.floor((s + e) / 2);
+              return [
+                { label: "Morning Session", start: s, end: mid },
+                { label: "Afternoon Session", start: mid, end: e },
+              ];
+            };
+            const CLINIC_SESSIONS = getSessionsForDay(weekDays[0]).length > 0
+              ? getSessionsForDay(weekDays[0])
+              : [{ label: "Morning Session", start: 9, end: 13 }, { label: "Afternoon Session", start: 13, end: 17 }];
+
+            // Build paired provider appointment map
+            const pairedApptMap = {};
+            if (calCombinedView) {
+              patients.filter(p => p.handoffPartner && p.shareCalendar !== false).forEach(p => {
+                if (p.nextAppt) {
+                  if (!pairedApptMap[p.nextAppt]) pairedApptMap[p.nextAppt] = [];
+                  pairedApptMap[p.nextAppt].push({ chartNumber: p.chartNumber, procedure: p.procedure, discipline: p.discipline, provider: p.handoffPartner, providerYear: p.handoffPartnerYear });
+                }
+              });
+            }
+
+            // Build appointment map: date -> list of appt objects
+            const apptMap = {};
+            patients.forEach(p => {
+              if (p.nextAppt) {
+                if (!apptMap[p.nextAppt]) apptMap[p.nextAppt] = [];
+                apptMap[p.nextAppt].push({
+                  type: "confirmed",
+                  patient: p,
+                  duration: PROCEDURE_DURATIONS[p.procedure] || PROCEDURE_DURATIONS.default,
+                  label: p.chartNumber,
+                  sublabel: p.procedure || p.discipline,
+                  color: NYU.purple,
+                  bg: NYU.purpleLight,
+                });
+              }
+            });
+
+            // Suggested slots — patients whose predicted next visit falls within 2 weeks
+            patients.filter(p => !p.treatmentComplete && !p.nextAppt).forEach(p => {
+              const pred = predictCompletion(p);
+              if (!pred) return;
+              const avgInterval = pred.avgInterval || 21;
+              const lastVisit = p.lastVisit ? new Date(p.lastVisit) : null;
+              if (!lastVisit) return;
+              const suggestedDate = fmt(addDays(lastVisit, avgInterval));
+              if (!apptMap[suggestedDate]) apptMap[suggestedDate] = [];
+              apptMap[suggestedDate].push({
+                type: "suggested",
+                patient: p,
+                duration: PROCEDURE_DURATIONS[p.procedure] || PROCEDURE_DURATIONS.default,
+                label: `Schedule ${p.chartNumber}`,
+                sublabel: `Suggested · ${p.discipline}`,
+                color: NYU.purpleMid,
+                bg: "#f3e8ff",
+              });
+            });
+
+            const gradDateStr = graduationDateStr;
+
+            // Month helpers
+            const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+            const daysInMonth = (d) => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+            const monthStart = startOfMonth(calDate);
+            const firstDayOfWeek = (monthStart.getDay() + 6) % 7; // Mon=0
+            const totalDays = daysInMonth(calDate);
+
+            const ApptChip = ({ appt, compact }) => (
+              <div onClick={() => { setDetailPatient(appt.patient.id); }} style={{ background: appt.bg, borderLeft: `3px solid ${appt.color}`, borderRadius: 6, padding: compact ? "2px 6px" : "5px 8px", marginBottom: 3, cursor: "pointer", transition: "opacity 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.opacity = "0.8"}
+                onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+              >
+                <div style={{ fontSize: compact ? 10 : 11, fontWeight: 700, color: appt.color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {appt.type === "suggested" ? "💡 " : "📌 "}{appt.label}
+                </div>
+                {!compact && <div style={{ fontSize: 10, color: NYU.gray400, marginTop: 1 }}>{appt.sublabel}</div>}
+              </div>
+            );
+
+            return (
+              <div>
+                {/* Calendar toolbar */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button onClick={() => setCalDate(d => calView === "week" ? addDays(d, -7) : new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                      style={{ background: NYU.gray100, border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+                    <span style={{ fontWeight: 700, fontSize: 15, color: NYU.gray900, minWidth: 180, textAlign: "center" }}>
+                      {calView === "week"
+                        ? `${fmtDisplay(weekDays[0])} — ${fmtDisplay(weekDays[4])}`
+                        : fmtMonth(calDate)}
+                    </span>
+                    <button onClick={() => setCalDate(d => calView === "week" ? addDays(d, 7) : new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                      style={{ background: NYU.gray100, border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
+                    <button onClick={() => setCalDate(new Date())} style={{ background: NYU.lavender, border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600, color: NYU.purple, fontFamily: "'Inter', sans-serif" }}>Today</button>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {/* Week/Month toggle */}
+                    <div style={{ display: "flex", background: NYU.gray100, borderRadius: 10, padding: 3 }}>
+                      {["week", "month"].map(v => (
+                        <button key={v} onClick={() => setCalView(v)} style={{ background: calView === v ? "white" : "transparent", border: "none", borderRadius: 8, padding: "6px 16px", cursor: "pointer", fontSize: 12, fontWeight: 600, color: calView === v ? NYU.purple : NYU.gray400, fontFamily: "'Inter', sans-serif", boxShadow: calView === v ? "0 1px 4px rgba(107,33,168,0.1)" : "none", transition: "all 0.15s" }}>
+                          {v === "week" ? "Week" : "Month"}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Combined view — only if paired providers exist */}
+                    {patients.some(p => p.handoffPartner) && (
+                      <button onClick={() => setCalCombinedView(!calCombinedView)}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 10, border: `1px solid ${calCombinedView ? "#0ea5e9" : NYU.gray200}`, background: calCombinedView ? "#e0f2fe" : "white", color: calCombinedView ? "#0369a1" : NYU.gray400, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "'Inter', sans-serif", transition: "all 0.15s" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#0ea5e9", display: "inline-block" }} />
+                        Combined
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Legend */}
+                <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+                  {[
+                    { color: NYU.purple, bg: NYU.purpleLight, label: "Confirmed appointment" },
+                    { color: NYU.purpleMid, bg: "#f3e8ff", label: "Suggested — schedule soon" },
+                    { color: NYU.green, bg: NYU.greenLight, label: "Available slot" },
+                    { color: "#b45309", bg: "#fef3c7", label: "Graduation deadline" },
+                  ].concat(calCombinedView ? [{ color: "#0ea5e9", bg: "#e0f2fe", label: "Paired provider" }] : []).map(l => (
+                    <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 3, background: l.color }} />
+                      <span style={{ fontSize: 11, color: NYU.gray600 }}>{l.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── WEEK VIEW ── */}
+                {calView === "week" && (
+                  <div style={{ background: "white", borderRadius: 16, border: `1px solid ${NYU.gray100}`, overflow: "hidden" }}>
+                    {/* Day headers */}
+                    <div style={{ display: "grid", gridTemplateColumns: "64px repeat(7, 1fr)", borderBottom: `1px solid ${NYU.gray100}` }}>
+                      <div style={{ padding: "10px 0", borderRight: `1px solid ${NYU.gray100}` }} />
+                      {weekDays.map((d, i) => (
+                        <div key={i} style={{ padding: "10px 12px", borderRight: i < 4 ? `1px solid ${NYU.gray100}` : "none", background: isToday(d) ? NYU.lavender : "white" }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: NYU.gray400, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                            {d.toLocaleDateString("en-US", { weekday: "short" })}
+                          </div>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: isToday(d) ? NYU.purple : NYU.gray900, fontFamily: "'Fraunces', serif", lineHeight: 1.2 }}>
+                            {d.getDate()}
+                          </div>
+                          {fmt(d) === gradDateStr && (
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#b45309", background: "#fef3c7", borderRadius: 99, padding: "1px 8px", marginTop: 2, display: "inline-block" }}>🎓 Graduation</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Sessions */}
+                    {CLINIC_SESSIONS.map((session, si) => (
+                      <div key={si} style={{ display: "grid", gridTemplateColumns: "64px repeat(7, 1fr)", borderBottom: si < CLINIC_SESSIONS.length - 1 ? `1px solid ${NYU.gray100}` : "none" }}>
+                        {/* Time label */}
+                        <div style={{ padding: "12px 8px", borderRight: `1px solid ${NYU.gray100}`, background: NYU.gray50 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: NYU.gray400, textTransform: "uppercase", letterSpacing: "0.05em", lineHeight: 1.4 }}>
+                            {session.label.split(" ")[0]}<br/>{session.label.split(" ")[1]}
+                          </div>
+                          <div style={{ fontSize: 10, color: NYU.gray400, marginTop: 4 }}>{session.start}:00–{session.end}:00</div>
+                        </div>
+                        {/* Day cells */}
+                        {weekDays.map((d, di) => {
+                          const dateStr = fmt(d);
+                          const dayAppts = (apptMap[dateStr] || []);
+                          const hasAppt = dayAppts.length > 0;
+                          const isGrad = dateStr === gradDateStr;
+                          const daySched = todaySchedule(d);
+                          const dayDisabled = !daySched.enabled;
+                          return (
+                            <div key={di} style={{ padding: "10px 8px", borderRight: di < 6 ? `1px solid ${NYU.gray100}` : "none", minHeight: 90, background: dayDisabled ? NYU.gray50 : isToday(d) ? "#fdfcff" : "white", position: "relative" }}>
+                              {dayDisabled && <div style={{ fontSize: 10, color: NYU.gray200, fontStyle: "italic" }}>No clinic</div>}
+                              {!dayDisabled && daySched && <div style={{ fontSize: 9, color: NYU.gray400, marginBottom: 4 }}>{daySched.start}–{daySched.end}</div>}
+                              {isGrad && (
+                                <div style={{ background: "#fef3c7", borderLeft: `3px solid #b45309`, borderRadius: 6, padding: "4px 8px", marginBottom: 4 }}>
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: "#b45309" }}>🎓 Graduation Day</div>
+                                </div>
+                              )}
+                              {dayAppts.map((appt, ai) => <ApptChip key={ai} appt={appt} compact={false} />)}
+                              {!hasAppt && !isGrad && (
+                                {calCombinedView && (pairedApptMap[dateStr] || []).length > 0 && (
+                                <div>
+                                  {(pairedApptMap[dateStr] || []).map((a, ai) => (
+                                    <div key={"paired"+ai} style={{ background: "#e0f2fe", borderLeft: "3px solid #0ea5e9", borderRadius: 8, padding: "4px 8px", marginBottom: 3, fontSize: 11 }}>
+                                      <div style={{ fontWeight: 700, color: "#0369a1", fontSize: 10 }}>@{a.provider} · {a.providerYear}</div>
+                                      <div style={{ color: "#0284c7", fontSize: 10 }}>{a.chartNumber}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div style={{ fontSize: 10, color: NYU.gray200, fontStyle: "italic", marginTop: 4 }}>Available</div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── MONTH VIEW ── */}
+                {calView === "month" && (
+                  <div style={{ background: "white", borderRadius: 16, border: `1px solid ${NYU.gray100}`, overflow: "hidden" }}>
+                    {/* Weekday headers */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${NYU.gray100}` }}>
+                      {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d => (
+                        <div key={d} style={{ padding: "10px 0", textAlign: "center", fontSize: 11, fontWeight: 700, color: NYU.gray400, textTransform: "uppercase", letterSpacing: "0.06em" }}>{d}</div>
+                      ))}
+                    </div>
+                    {/* Day grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
+                      {/* Empty cells before month starts */}
+                      {Array(firstDayOfWeek).fill(null).map((_, i) => (
+                        <div key={`empty-${i}`} style={{ minHeight: 100, borderRight: `1px solid ${NYU.gray100}`, borderBottom: `1px solid ${NYU.gray100}`, background: NYU.gray50 }} />
+                      ))}
+                      {Array(totalDays).fill(null).map((_, i) => {
+                        const dayNum = i + 1;
+                        const d = new Date(calDate.getFullYear(), calDate.getMonth(), dayNum);
+                        const dateStr = fmt(d);
+                        const dayAppts = apptMap[dateStr] || [];
+                        const isGrad = dateStr === gradDateStr;
+                        const todayFlag = isToday(d);
+                        const weekend = isWeekend(d);
+                        const colIndex = (firstDayOfWeek + i) % 7;
+                        return (
+                          <div key={dayNum} style={{ minHeight: 100, padding: "6px 6px 8px", borderRight: colIndex < 6 ? `1px solid ${NYU.gray100}` : "none", borderBottom: `1px solid ${NYU.gray100}`, background: todayFlag ? "#fdfcff" : weekend ? NYU.gray50 : "white" }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: todayFlag ? NYU.purple : weekend ? NYU.gray400 : NYU.gray900, marginBottom: 4, width: 24, height: 24, borderRadius: "50%", background: todayFlag ? NYU.lavender : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {dayNum}
+                            </div>
+                            {isGrad && (
+                              <div style={{ background: "#fef3c7", borderLeft: `3px solid #b45309`, borderRadius: 4, padding: "2px 5px", marginBottom: 3 }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, color: "#b45309" }}>🎓 Graduation</div>
+                              </div>
+                            )}
+                            {dayAppts.slice(0, 2).map((appt, ai) => <ApptChip key={ai} appt={appt} compact={true} />)}
+                            {dayAppts.length > 2 && (
+                              <div style={{ fontSize: 10, color: NYU.purple, fontWeight: 600, marginTop: 2 }}>+{dayAppts.length - 2} more</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Upcoming appointments list */}
+                <div style={{ marginTop: 24 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: NYU.gray600, marginBottom: 12 }}>📋 Upcoming & Suggested</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {Object.entries(apptMap)
+                      .filter(([date]) => date >= fmt(new Date()))
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .slice(0, 8)
+                      .map(([date, appts]) => (
+                        <div key={date} style={{ background: "white", borderRadius: 14, padding: "14px 18px", border: `1px solid ${NYU.gray100}`, display: "flex", gap: 16, alignItems: "flex-start" }}>
+                          <div style={{ flexShrink: 0, textAlign: "center", minWidth: 44 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: NYU.gray400, textTransform: "uppercase" }}>
+                              {new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short" })}
+                            </div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: NYU.gray900, fontFamily: "'Fraunces', serif", lineHeight: 1 }}>
+                              {new Date(date + "T12:00:00").getDate()}
+                            </div>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            {appts.map((appt, i) => (
+                              <div key={i} onClick={() => setDetailPatient(appt.patient.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < appts.length - 1 ? `1px solid ${NYU.gray100}` : "none", cursor: "pointer" }}>
+                                <div style={{ width: 8, height: 8, borderRadius: "50%", background: appt.color, flexShrink: 0 }} />
+                                <div style={{ flex: 1 }}>
+                                  <span style={{ fontWeight: 600, fontSize: 13, color: NYU.gray900 }}>{appt.label}</span>
+                                  <span style={{ fontSize: 12, color: NYU.gray400, marginLeft: 8 }}>{appt.sublabel}</span>
+                                </div>
+                                <span style={{ fontSize: 11, color: NYU.gray400 }}>{appt.duration} min</span>
+                                {appt.type === "suggested" && (
+                                  <span style={{ fontSize: 10, fontWeight: 600, color: NYU.purpleMid, background: "#f3e8ff", borderRadius: 99, padding: "2px 8px" }}>Suggested</span>
+                                )}
+                                {appt.type === "confirmed" && (
+                                  <span style={{ fontSize: 10, fontWeight: 600, color: NYU.green, background: NYU.greenLight, borderRadius: 99, padding: "2px 8px" }}>Confirmed</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    {Object.entries(apptMap).filter(([date]) => date >= fmt(new Date())).length === 0 && (
+                      <div style={{ textAlign: "center", padding: "40px 20px", color: NYU.gray400 }}>
+                        <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
+                        <div style={{ fontSize: 14, fontWeight: 500 }}>No upcoming appointments</div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>Log next appointments on patient records to see them here</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
+
+
+          {/* NOTEBOOK TAB */}
+          {tab === "notebook" && (
+            <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+
+              {/* Left sidebar — note list */}
+              <div style={{ width: 280, flexShrink: 0 }}>
+                {/* Search + New */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                  <input
+                    style={{ ...inputStyle, fontSize: 13, padding: "8px 12px", flex: 1 }}
+                    placeholder="Search notes..."
+                    value={noteSearch}
+                    onChange={e => setNoteSearch(e.target.value)}
+                  />
+                  <button className="action-btn" onClick={() => {
+                    const id = `n${Date.now()}`;
+                    const newNote = { id, title: "Untitled", body: "", category: "General", pinned: false, updatedAt: new Date().toISOString().split("T")[0] };
+                    setNotes(prev => [newNote, ...prev]);
+                    setActiveNote(id);
+                    setNoteDraft(newNote);
+                  }} style={{ background: NYU.purple, color: "white", padding: "8px 14px", fontSize: 13, flexShrink: 0 }}>+ New</button>
+                </div>
+
+                {/* Pinned */}
+                {notes.filter(n => n.pinned).length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: NYU.gray400, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Pinned</div>
+                    {notes.filter(n => n.pinned && (!noteSearch || n.title.toLowerCase().includes(noteSearch.toLowerCase()) || n.body.toLowerCase().includes(noteSearch.toLowerCase()))).map(note => (
+                      <NoteCard key={note.id} note={note} active={activeNote === note.id} onClick={() => { setActiveNote(note.id); setNoteDraft({...note}); }} />
+                    ))}
+                  </div>
+                )}
+
+                {/* All notes */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: NYU.gray400, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>All Notes</div>
+                  {notes.filter(n => !n.pinned && (!noteSearch || n.title.toLowerCase().includes(noteSearch.toLowerCase()) || n.body.toLowerCase().includes(noteSearch.toLowerCase()))).length === 0 && (
+                    <div style={{ fontSize: 13, color: NYU.gray400, textAlign: "center", padding: "24px 0" }}>No notes yet</div>
+                  )}
+                  {notes.filter(n => !n.pinned && (!noteSearch || n.title.toLowerCase().includes(noteSearch.toLowerCase()) || n.body.toLowerCase().includes(noteSearch.toLowerCase()))).map(note => (
+                    <NoteCard key={note.id} note={note} active={activeNote === note.id} onClick={() => { setActiveNote(note.id); setNoteDraft({...note}); }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Right — note editor */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {!activeNote || !noteDraft ? (
+                  <div style={{ background: "white", borderRadius: 16, border: `1px solid ${NYU.gray100}`, padding: "80px 40px", textAlign: "center" }}>
+                    <div style={{ fontSize: 40, marginBottom: 16 }}>📓</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: NYU.gray900, marginBottom: 8 }}>Your Notebook</div>
+                    <div style={{ fontSize: 13, color: NYU.gray400, marginBottom: 24, lineHeight: 1.6 }}>Jot down clinical thoughts, patient reminders,<br/>study notes — all in one place.</div>
+                    <button className="action-btn" onClick={() => {
+                      const id = `n${Date.now()}`;
+                      const newNote = { id, title: "Untitled", body: "", category: "General", pinned: false, updatedAt: new Date().toISOString().split("T")[0] };
+                      setNotes(prev => [newNote, ...prev]);
+                      setActiveNote(id);
+                      setNoteDraft(newNote);
+                    }} style={{ background: NYU.purple, color: "white" }}>Create your first note</button>
+                  </div>
+                ) : (
+                  <div style={{ background: "white", borderRadius: 16, border: `1px solid ${NYU.gray100}`, overflow: "hidden" }}>
+                    {/* Note toolbar */}
+                    <div style={{ padding: "14px 20px", borderBottom: `1px solid ${NYU.gray100}`, display: "flex", alignItems: "center", gap: 10 }}>
+                      {/* Category selector */}
+                      <select value={noteDraft.category} onChange={e => setNoteDraft(p => ({...p, category: e.target.value}))}
+                        style={{ fontSize: 12, fontWeight: 600, border: "none", background: noteDraft.category === "Clinical" ? "#e0f2fe" : noteDraft.category === "Patient" ? "#f3e8ff" : noteDraft.category === "Study" ? "#d1fae5" : "#fef3c7", color: noteDraft.category === "Clinical" ? "#0369a1" : noteDraft.category === "Patient" ? "#6d28d9" : noteDraft.category === "Study" ? "#065f46" : "#92400e", borderRadius: 99, padding: "4px 12px", cursor: "pointer", outline: "none", fontFamily: "'Inter', sans-serif" }}>
+                        <option>Clinical</option>
+                        <option>Patient</option>
+                        <option>Study</option>
+                        <option>General</option>
+                      </select>
+
+                      {/* Pin toggle */}
+                      <button onClick={() => setNoteDraft(p => ({...p, pinned: !p.pinned}))} style={{ background: noteDraft.pinned ? NYU.amberLight : NYU.gray100, border: "none", borderRadius: 99, padding: "4px 12px", cursor: "pointer", fontSize: 12, color: noteDraft.pinned ? NYU.amber : NYU.gray400, fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>
+                        {noteDraft.pinned ? "📌 Pinned" : "Pin"}
+                      </button>
+
+                      <div style={{ flex: 1 }} />
+
+                      {/* Delete */}
+                      <button onClick={() => { setNotes(prev => prev.filter(n => n.id !== activeNote)); setActiveNote(null); setNoteDraft(null); }}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: NYU.gray400, fontFamily: "'Inter', sans-serif", padding: "4px 8px" }}>Delete</button>
+
+                      {/* Save */}
+                      <button className="action-btn" onClick={() => {
+                        const updated = { ...noteDraft, updatedAt: new Date().toISOString().split("T")[0] };
+                        setNotes(prev => prev.map(n => n.id === activeNote ? updated : n));
+                        setNoteDraft(updated);
+                      }} style={{ background: NYU.purple, color: "white", padding: "7px 18px", fontSize: 13 }}>Save</button>
+                    </div>
+
+                    {/* Title */}
+                    <input
+                      style={{ width: "100%", fontSize: 24, fontWeight: 700, color: NYU.gray900, fontFamily: "'Fraunces', serif", border: "none", outline: "none", padding: "24px 28px 8px", letterSpacing: "-0.01em" }}
+                      placeholder="Untitled"
+                      value={noteDraft.title}
+                      onChange={e => setNoteDraft(p => ({...p, title: e.target.value}))}
+                    />
+
+                    {/* Updated at */}
+                    <div style={{ fontSize: 11, color: NYU.gray400, paddingLeft: 28, paddingBottom: 12 }}>Last updated {noteDraft.updatedAt}</div>
+
+                    {/* Body */}
+                    <textarea
+                      style={{ width: "100%", minHeight: 420, fontSize: 15, color: NYU.gray600, border: "none", outline: "none", padding: "0 28px 28px", resize: "none", lineHeight: 1.8, fontFamily: "'Inter', sans-serif", background: "transparent" }}
+                      placeholder="Start writing... Use - for bullets, [ ] for checkboxes"
+                      value={noteDraft.body}
+                      onChange={e => setNoteDraft(p => ({...p, body: e.target.value}))}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {/* REQUIREMENTS TAB */}
           {tab === "requirements" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1217,6 +1823,206 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
         </div>
       </div>
 
+      {/* PATIENT ROSTER PANEL */}
+      {showRosterPanel && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 800, background: "#f8f6fb", overflowY: "auto", animation: "slideInRight 0.25s ease" }}>
+          <div style={{ background: "white", borderBottom: `1px solid ${NYU.gray100}`, padding: "0 20px", height: 56, display: "flex", alignItems: "center", gap: 14, position: "sticky", top: 0, zIndex: 10 }}>
+            <button onClick={() => setShowRosterPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NYU.gray600, padding: 0 }}>←</button>
+            <span style={{ fontWeight: 600, fontSize: 16, color: NYU.gray900, flex: 1 }}>👤 Patient Roster</span>
+            <button className="action-btn" onClick={() => { setShowAddModal(true); setShowRosterPanel(false); }} style={{ background: NYU.purple, color: "white", fontSize: 12, padding: "7px 16px" }}>+ Add Patient</button>
+          </div>
+
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px 80px" }}>
+
+            {/* Stats row */}
+            <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 24 }}>
+              {stats.map(s => (
+                <div key={s.label} style={{ background: "white", borderRadius: 14, padding: "18px 20px", border: `1px solid ${NYU.gray100}` }}>
+                  <div style={{ fontSize: 30, fontWeight: 700, color: NYU.gray900, fontFamily: "'Fraunces', serif", lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontSize: 12, color: NYU.gray400, marginTop: 6, fontWeight: 500 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Filter row */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+              {["All", "Active", "Urgent", "F/U Needed", "Complete"].map(f => (
+                <button key={f} className="filter-btn" onClick={() => setFilter(f)} style={{ background: filter === f ? NYU.purple : NYU.gray100, color: filter === f ? "white" : NYU.gray600, border: "none", fontSize: 12, padding: "6px 14px" }}>{f}</button>
+              ))}
+            </div>
+
+            {filtered.length === 0 && (
+              <div style={{ textAlign: "center", padding: "60px 20px", color: NYU.gray400 }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🗂️</div>
+                <div style={{ fontSize: 16, fontWeight: 500 }}>No patients in this category</div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {filtered.map(patient => {
+                const status = calculateStatus(patient);
+                const meta = STATUS_META[status] || { color: NYU.gray400, bg: NYU.gray100 };
+                const urgency = calculateUrgency(patient);
+                const daysToCompletion = daysUntil(patient.expectedCompletion);
+                const avatarMeta = DISCIPLINE_AVATAR[patient.discipline] || { bg: NYU.lavender, color: NYU.purple, initial: "??" };
+                return (
+                  <div key={patient.id} onClick={() => { setDetailPatient(patient.id); setShowRosterPanel(false); }} style={{ background: "white", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer", border: `1px solid ${urgency ? "#fed7aa" : NYU.gray100}`, transition: "all 0.18s", boxShadow: urgency ? "0 2px 12px rgba(194,65,12,0.08)" : "0 1px 3px rgba(107,33,168,0.05)" }}>
+                    <div style={{ width: 46, height: 46, borderRadius: 14, background: avatarMeta.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: avatarMeta.color, letterSpacing: "0.04em" }}>{avatarMeta.initial}</span>
+                      {urgency && <div style={{ position: "absolute", top: -2, right: -2, width: 10, height: 10, borderRadius: "50%", background: NYU.orange, border: "2px solid white" }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontWeight: 600, fontSize: 15, color: NYU.gray900 }}>{patient.chartNumber}</span>
+                        <span style={{ fontSize: 10, color: NYU.gray400, fontWeight: 500 }}>{patient.id}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: NYU.gray400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{patient.procedure || "No procedure"} · {patient.discipline}</div>
+                      {patient.handoffPartner && <div style={{ fontSize: 11, color: "#0369a1", marginTop: 2, fontWeight: 600 }}>🤝 @{patient.handoffPartner} · {patient.handoffPartnerYear}</div>}
+                      {patient.nextAppt && <div style={{ fontSize: 11, color: NYU.purple, marginTop: 3, fontWeight: 500 }}>📅 {patient.nextAppt}</div>}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: "nowrap" }}>{status}</span>
+                      {daysToCompletion !== null && !patient.treatmentComplete && (
+                        <span style={{ fontSize: 11, color: daysToCompletion < 0 ? NYU.red : daysToCompletion <= 30 ? NYU.amber : NYU.gray400, fontWeight: 500 }}>
+                          {daysToCompletion < 0 ? "Overdue" : `Due ${daysToCompletion}d`}
+                        </span>
+                      )}
+                      <span style={{ color: NYU.gray200, fontSize: 16 }}>›</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* GRADUATION GOALS PANEL */}
+      {showGoalsPanel && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 800, background: "#f8f6fb", overflowY: "auto", animation: "slideInRight 0.25s ease" }}>
+          <div style={{ background: "white", borderBottom: `1px solid ${NYU.gray100}`, padding: "0 20px", height: 56, display: "flex", alignItems: "center", gap: 14, position: "sticky", top: 0, zIndex: 10 }}>
+            <button onClick={() => setShowGoalsPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NYU.gray600, padding: 0 }}>←</button>
+            <span style={{ fontWeight: 600, fontSize: 16, color: NYU.gray900, flex: 1 }}>🎓 Graduation Goals</span>
+            <button className="action-btn" onClick={() => { setEditGoalsDraft([...customGoals.map(g => ({...g}))]); setEditingGoals(true); setShowGoalsPanel(false); setTab("requirements"); }} style={{ background: "white", color: NYU.purple, border: `1.5px solid ${NYU.purple}`, fontSize: 12, padding: "7px 16px" }}>✎ Edit Goals</button>
+          </div>
+
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px 80px" }}>
+
+            {/* Velocity summary */}
+            <div style={{ background: onTrack ? NYU.lavender : NYU.redLight, borderRadius: 16, padding: "20px 24px", marginBottom: 24, border: `1px solid ${onTrack ? NYU.gray200 : "#fecaca"}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: NYU.gray900, fontFamily: "'Fraunces', serif", marginBottom: 6 }}>
+                  {onTrack ? "🎓 On track for graduation" : "📋 Caseload needs attention"}
+                </div>
+                <div style={{ fontSize: 13, color: NYU.gray600 }}>
+                  {totalCompleted} of {totalRequired} procedures complete · {daysToGraduation} days remaining
+                </div>
+                {atRiskRequirements.length > 0 && (
+                  <div style={{ fontSize: 12, color: NYU.gray600, marginTop: 6 }}>
+                    Focus on: {atRiskRequirements.slice(0, 3).join(", ")}
+                  </div>
+                )}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 40, fontWeight: 700, color: NYU.gray900, fontFamily: "'Fraunces', serif", lineHeight: 1 }}>{velocityPct}%</div>
+                <div style={{ fontSize: 11, color: NYU.gray400, marginTop: 4 }}>overall complete</div>
+              </div>
+            </div>
+
+            {/* Requirements list */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {customGoals.filter(g => g.visible).map(goal => {
+                const completed = patients.filter(p => p.discipline === goal.discipline).reduce((s, p) => s + (p.visitLog?.length || 0), 0);
+                const pct = Math.min((completed / goal.required) * 100, 100);
+                const color = pct >= 100 ? NYU.green : pct >= 60 ? NYU.blue : pct >= 30 ? NYU.amber : NYU.red;
+                const activePts = patients.filter(p => p.discipline === goal.discipline && !p.treatmentComplete);
+                return (
+                  <div key={goal.discipline} className="card" style={{ padding: "16px 20px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: NYU.gray900 }}>{goal.discipline}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {pct >= 100 && <span style={{ fontSize: 12, color: NYU.green, fontWeight: 600 }}>✓ Complete</span>}
+                        {pct < 100 && <span style={{ fontSize: 12, color: NYU.gray400 }}>{goal.required - completed} remaining</span>}
+                        <span style={{ fontSize: 13, fontWeight: 700, color }}>{completed}/{goal.required}</span>
+                      </div>
+                    </div>
+                    <div className="progress-bar">
+                      <div className="progress-fill" style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                    {activePts.length > 0 && (
+                      <div style={{ marginTop: 10, fontSize: 12, color: NYU.gray600 }}>
+                        <span style={{ fontWeight: 600, color: NYU.purple }}>Active patients: </span>
+                        {activePts.map(p => p.chartNumber).join(", ")}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* URGENT PATIENTS PANEL */}
+      {showUrgentPanel && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 800, background: "#f8f6fb", overflowY: "auto", animation: "slideInRight 0.25s ease" }}>
+          <div style={{ background: "white", borderBottom: `1px solid ${NYU.gray100}`, padding: "0 20px", height: 56, display: "flex", alignItems: "center", gap: 14, position: "sticky", top: 0, zIndex: 10 }}>
+            <button onClick={() => { setShowUrgentPanel(false); setFilter("All"); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: NYU.gray600, padding: 0 }}>←</button>
+            <span style={{ fontWeight: 600, fontSize: 16, color: NYU.gray900, flex: 1 }}>⚠️ Urgent Patients</span>
+            <span style={{ fontSize: 12, color: NYU.orange, fontWeight: 600, background: NYU.orangeLight, padding: "4px 12px", borderRadius: 99 }}>{urgentPatients.length} need attention</span>
+          </div>
+
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px 80px" }}>
+
+            {urgentPatients.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "80px 20px" }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: NYU.gray900, marginBottom: 8 }}>All clear!</div>
+                <div style={{ fontSize: 14, color: NYU.gray400 }}>No patients need urgent attention right now.</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ background: NYU.orangeLight, borderRadius: 16, padding: "16px 20px", marginBottom: 24, border: `1px solid #fed7aa` }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: NYU.orange, marginBottom: 4 }}>Action required on {urgentPatients.length} patient{urgentPatients.length !== 1 ? "s" : ""}</div>
+                  <div style={{ fontSize: 13, color: NYU.gray600 }}>Each patient below has at least one flag that needs your attention before your next clinic session.</div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {urgentPatients.map(patient => {
+                    const urgency = calculateUrgency(patient);
+                    const avatarMeta = DISCIPLINE_AVATAR[patient.discipline] || { bg: NYU.lavender, color: NYU.purple, initial: "??" };
+                    return (
+                      <div key={patient.id} style={{ background: "white", borderRadius: 16, border: `1px solid #fed7aa`, overflow: "hidden", boxShadow: "0 2px 12px rgba(194,65,12,0.08)" }}>
+                        {/* Patient row */}
+                        <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+                          <div style={{ width: 46, height: 46, borderRadius: 14, background: avatarMeta.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: avatarMeta.color, letterSpacing: "0.04em" }}>{avatarMeta.initial}</span>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: 15, color: NYU.gray900 }}>{patient.chartNumber}</div>
+                            <div style={{ fontSize: 12, color: NYU.gray400, marginTop: 2 }}>{patient.procedure} · {patient.discipline}</div>
+                          </div>
+                          <button className="action-btn" onClick={() => { setDetailPatient(patient.id); setShowUrgentPanel(false); }} style={{ background: NYU.purple, color: "white", fontSize: 12, padding: "7px 16px" }}>View Patient →</button>
+                        </div>
+                        {/* Urgency flags */}
+                        <div style={{ background: NYU.orangeLight, padding: "10px 20px", borderTop: `1px solid #fed7aa`, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {urgency.map((reason, i) => (
+                            <span key={i} style={{ fontSize: 11, fontWeight: 600, color: NYU.orange, background: "white", borderRadius: 99, padding: "3px 10px", border: `1px solid #fed7aa` }}>⚠ {reason}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+
       {/* ADD PATIENT MODAL */}
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
@@ -1250,16 +2056,7 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
                   <input type="date" style={inputStyle} value={newPatient.expectedCompletion} onChange={(e) => setNewPatient((p) => ({ ...p, expectedCompletion: e.target.value }))} />
                 </div>
               </div>
-              <div>
-                <label style={labelStyle}>AxiUm Chart Number <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(encrypted, optional)</span></label>
-                <input
-                  style={inputStyle}
-                  placeholder="e.g. 1047823"
-                  value={newPatient._chartPlain || ""}
-                  onChange={(e) => setNewPatient((p) => ({ ...p, _chartPlain: e.target.value }))}
-                />
 
-              </div>
               <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                 <button className="action-btn" onClick={() => setShowAddModal(false)} style={{ flex: 1, background: "white", color: NYU.gray600, border: `1.5px solid ${NYU.gray200}` }}>Cancel</button>
                 <button className="action-btn" onClick={addPatient} style={{ flex: 1, background: NYU.purple, color: "white" }}>Add Patient</button>
@@ -1359,8 +2156,7 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
         const status = calculateStatus(patient);
         const meta = STATUS_META[status] || { color: NYU.gray400, bg: NYU.gray100 };
         const urgency = calculateUrgency(patient);
-        const avatarColors = ["#e0d4f7","#d4e8f7","#d4f7e0","#f7e8d4","#f7d4d4","#d4d4f7"];
-        const avatarBg = avatarColors[(patient.chartNumber || '0').charCodeAt(0) % avatarColors.length];
+        const avatarMeta = DISCIPLINE_AVATAR[patient.discipline] || { bg: NYU.lavender, color: NYU.purple, initial: "??" };
 
         return (
           <div style={{ position: "fixed", inset: 0, zIndex: 800, background: "#f8f6fb", overflowY: "auto", animation: "slideInRight 0.25s ease" }}>
@@ -1377,8 +2173,8 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
 
               {/* Patient Hero Card */}
               <div style={{ background: "white", borderRadius: 20, padding: "24px 20px", marginBottom: 16, border: `1px solid ${NYU.gray100}`, display: "flex", alignItems: "center", gap: 16 }}>
-                <div style={{ width: 60, height: 60, borderRadius: "50%", background: avatarBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <span style={{ fontSize: 24, fontWeight: 700, color: NYU.purpleDark }}>{patient.chartNumber ? patient.chartNumber.slice(-2) : '?'}</span>
+                <div style={{ width: 60, height: 60, borderRadius: 18, background: avatarMeta.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: avatarMeta.color, letterSpacing: "0.04em" }}>{avatarMeta.initial}</span>
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 20, color: NYU.gray900, fontFamily: "'Fraunces', serif" }}>{patient.chartNumber}</div>
@@ -1547,6 +2343,48 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
                 <textarea rows={3} value={patient.notes} onChange={(e) => updateField(patient.id, "notes", e.target.value)} style={{ ...inputStyle, resize: "vertical", fontSize: 13 }} placeholder="Add notes about this patient..." />
               </div>
 
+
+              {/* Paired Provider Section */}
+              <div style={{ background: "white", borderRadius: 16, padding: "18px 20px", marginBottom: 16, border: `1px solid ${NYU.gray100}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: NYU.gray900 }}>🤝 Paired Provider</div>
+                  <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, background: patient.handoffPartner ? NYU.greenLight : NYU.gray100, color: patient.handoffPartner ? NYU.green : NYU.gray400, fontWeight: 600 }}>{patient.handoffPartner ? "Active" : "Not Assigned"}</span>
+                </div>
+
+                {/* Partner assignment */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: NYU.gray400, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Paired Provider Name</div>
+                    <input style={inputStyle} placeholder="e.g. Marcus Reid" value={patient.handoffPartner || ""} onChange={e => updateField(patient.id, "handoffPartner", e.target.value)} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: NYU.gray400, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Year</div>
+                    <select style={{ ...inputStyle, width: 80 }} value={patient.handoffPartnerYear || "D3"} onChange={e => updateField(patient.id, "handoffPartnerYear", e.target.value)}>
+                      <option>D2</option><option>D3</option><option>D4</option>
+                    </select>
+                  </div>
+                </div>
+
+
+
+                {/* Shared Notes */}
+                <div>
+                  <div style={{ fontSize: 11, color: NYU.gray400, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Shared Notes</div>
+                  <textarea rows={3} style={{ ...inputStyle, resize: "vertical", fontSize: 13 }}
+                    placeholder="Notes visible to your paired provider — treatment status, preferences, next steps..."
+                    value={patient.handoffNotes || ""}
+                    onChange={e => updateField(patient.id, "handoffNotes", e.target.value)}
+                  />
+                </div>
+
+                {patient.handoffPartner && (
+                  <div style={{ background: NYU.greenLight, borderRadius: 10, padding: "10px 14px", marginTop: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span>✅</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: NYU.green }}>Sharing active with @{patient.handoffPartner} ({patient.handoffPartnerYear})</span>
+                  </div>
+                )}
+              </div>
+
               {/* Mark Complete */}
               <div style={{ background: "white", borderRadius: 16, padding: "16px 20px", marginBottom: 16, border: `1px solid ${NYU.gray100}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
@@ -1595,10 +2433,10 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
                 <div style={{ fontSize: 10, fontWeight: 700, color: NYU.gray400, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Try asking</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {[
+                    "What's on my calendar this week?",
                     "Which patients need follow-up?",
                     "Am I on track to graduate?",
-                    "What does D3330 cover?",
-                    "Who qualifies for my perio req?",
+                    "What did I note about PT-1047823?",
                   ].map((q) => (
                     <button key={q} onClick={() => setChatInput(q)} style={{ background: "white", border: `1px solid ${NYU.gray200}`, borderRadius: 99, padding: "4px 10px", fontSize: 11, color: NYU.purple, cursor: "pointer", fontFamily: "'Inter', sans-serif", fontWeight: 500 }}>{q}</button>
                   ))}
@@ -1676,6 +2514,233 @@ Your tone is conversational, warm, and direct — like a knowledgeable senior co
           </span>
         </button>
       </div>
+
+
+      {/* PAIRED PROVIDER SLIDE-IN PANEL */}
+      {showPairedPanel && (
+        <div onClick={() => setShowPairedPanel(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 199 }} />
+      )}
+      {showPairedPanel && (
+        <div style={{ position: "fixed", top: 0, right: 0, width: "100%", maxWidth: 460, height: "100vh", background: "white", zIndex: 200, boxShadow: "-4px 0 32px rgba(107,33,168,0.15)", overflowY: "auto", animation: "slideInRight 0.25s ease" }}>
+          <div style={{ padding: "24px 24px 16px", borderBottom: `1px solid ${NYU.gray100}`, display: "flex", alignItems: "center", gap: 14, position: "sticky", top: 0, background: "white", zIndex: 10 }}>
+            <button onClick={() => setShowPairedPanel(false)} style={{ background: NYU.gray100, border: "none", borderRadius: 10, padding: "8px 12px", cursor: "pointer", fontSize: 16, fontFamily: "'Inter', sans-serif" }}>←</button>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 18, color: NYU.gray900, fontFamily: "'Fraunces', serif" }}>Paired Provider View</div>
+              <div style={{ fontSize: 12, color: NYU.gray400, fontFamily: "'Inter', sans-serif" }}>Shared patients and partner access</div>
+            </div>
+          </div>
+          <div style={{ padding: 24 }}>
+            {(() => {
+              const sharedPatients = patients.filter(p => p.handoffPartner);
+              const needsPartner = patients.filter(p => !p.handoffPartner && !p.treatmentComplete);
+              const partnerMap = {};
+              sharedPatients.forEach(p => {
+                const key = p.handoffPartner;
+                if (!partnerMap[key]) partnerMap[key] = { name: p.handoffPartner, year: p.handoffPartnerYear, patients: [] };
+                partnerMap[key].patients.push(p);
+              });
+              const partners = Object.values(partnerMap);
+
+              return (
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
+                    {[
+                      { label: "Shared Patients", value: sharedPatients.length, color: NYU.green },
+                      { label: "Partners", value: partners.length, color: NYU.purple },
+                      { label: "Needs Partner", value: needsPartner.length, color: NYU.orange },
+                    ].map(s => (
+                      <div key={s.label} style={{ background: NYU.gray50, borderRadius: 12, padding: "14px 16px", textAlign: "center", border: `1px solid ${NYU.gray100}` }}>
+                        <div style={{ fontSize: 28, fontWeight: 700, color: s.color, fontFamily: "'Fraunces', serif" }}>{s.value}</div>
+                        <div style={{ fontSize: 11, color: NYU.gray400, marginTop: 4, fontFamily: "'Inter', sans-serif" }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {partners.length > 0 ? partners.map(partner => (
+                    <div key={partner.name} style={{ marginBottom: 24 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: 10, background: NYU.purple, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <span style={{ fontSize: 15, color: "white", fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>{partner.name.charAt(0)}</span>
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 15, color: NYU.gray900, fontFamily: "'Inter', sans-serif" }}>{partner.name}</div>
+                          <div style={{ fontSize: 12, color: NYU.purple, fontFamily: "'Inter', sans-serif" }}>{partner.year} · {partner.patients.length} shared patient{partner.patients.length !== 1 ? "s" : ""}</div>
+                        </div>
+                      </div>
+                      {partner.patients.map(p => {
+                        const av = DISCIPLINE_AVATAR[p.discipline] || { bg: NYU.lavender, color: NYU.purple, initial: "??" };
+                        return (
+                          <div key={p.id} style={{ background: "white", border: `1px solid ${NYU.gray100}`, borderRadius: 14, padding: "14px 16px", marginBottom: 8 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                              <div style={{ width: 36, height: 36, borderRadius: 10, background: av.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: av.color, fontFamily: "'Inter', sans-serif" }}>{av.initial}</span>
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 700, fontSize: 14, color: NYU.gray900, fontFamily: "'Inter', sans-serif" }}>{p.chartNumber}</div>
+                                <div style={{ fontSize: 12, color: NYU.gray400, fontFamily: "'Inter', sans-serif" }}>{p.discipline} · {p.procedure || "No procedure"}</div>
+                              </div>
+                              <button className="action-btn" onClick={() => { setDetailPatient(p.id); setShowPairedPanel(false); setTab("roster"); }} style={{ background: NYU.lavender, color: NYU.purple, fontSize: 11 }}>View →</button>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                              {[
+                                { key: "shareCalendar", label: "📅 Next Appt", value: p.nextAppt || "Not scheduled" },
+                                { key: "shareVisitHistory", label: "📋 Visits", value: `${p.visitLog?.length || 0} logged` },
+                                { key: "shareTreatmentNotes", label: "📝 Procedure", value: p.procedure || "None" },
+                                { key: "sharePreAuth", label: "📄 Pre-Auth", value: p.preAuth },
+                              ].map(({ key, label, value }) => {
+                                const shared = p[key] !== false;
+                                return (
+                                  <div key={key} onClick={() => updateField(p.id, key, !shared)}
+                                    style={{ padding: "8px 10px", background: shared ? NYU.lavender : NYU.gray50, borderRadius: 8, cursor: "pointer", border: `1px solid ${shared ? NYU.purple + "22" : NYU.gray100}` }}>
+                                    <div style={{ fontSize: 10, color: NYU.gray400, marginBottom: 2, fontFamily: "'Inter', sans-serif" }}>{label} {shared ? "🔓" : "🔒"}</div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: shared ? NYU.gray900 : NYU.gray300, fontFamily: "'Inter', sans-serif" }}>{shared ? value : "Hidden"}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {p.handoffNotes && (
+                              <div style={{ marginTop: 8, padding: "8px 10px", background: NYU.lavender, borderRadius: 8, fontSize: 12, color: NYU.gray700, fontStyle: "italic", fontFamily: "'Inter', sans-serif" }}>"{p.handoffNotes}"</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )) : (
+                    <div style={{ textAlign: "center", padding: "40px 20px", color: NYU.gray400 }}>
+                      <div style={{ fontSize: 36, marginBottom: 12 }}>🤝</div>
+                      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, fontFamily: "'Inter', sans-serif" }}>No paired providers yet</div>
+                      <div style={{ fontSize: 13, fontFamily: "'Inter', sans-serif" }}>Open a patient and assign a paired provider to get started</div>
+                    </div>
+                  )}
+
+                  {needsPartner.length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: NYU.orange, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12, fontFamily: "'Inter', sans-serif" }}>⚠ No Partner Assigned</div>
+                      {needsPartner.map(p => (
+                        <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "white", border: `1px solid ${NYU.gray100}`, borderRadius: 12, marginBottom: 8 }}>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: NYU.gray900, fontFamily: "'Inter', sans-serif" }}>{p.chartNumber}</div>
+                            <div style={{ fontSize: 12, color: NYU.gray400, fontFamily: "'Inter', sans-serif" }}>{p.discipline}</div>
+                          </div>
+                          <button className="action-btn" onClick={() => { setDetailPatient(p.id); setShowPairedPanel(false); setTab("roster"); }} style={{ background: NYU.lavender, color: NYU.purple, fontSize: 11 }}>Assign →</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* SETTINGS MODAL */}
+      {showSettings && settingsDraft && (
+        <div className="modal-overlay" onClick={() => setShowSettings(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: NYU.gray900, fontFamily: "'Fraunces', serif" }}>Settings</h2>
+                <p style={{ fontSize: 12, color: NYU.gray400, marginTop: 3 }}>Personalize your ClinIQ experience</p>
+              </div>
+              <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: NYU.gray400 }}>×</button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+              {/* Profile */}
+              <div style={{ background: NYU.lavender, borderRadius: 14, padding: "16px 18px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: NYU.purple, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Profile</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Full Name</label>
+                    <input style={inputStyle} value={settingsDraft.name} onChange={e => setSettingsDraft(p => ({...p, name: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Student Year</label>
+                    <select style={inputStyle} value={settingsDraft.year} onChange={e => setSettingsDraft(p => ({...p, year: e.target.value}))}>
+                      <option>D2</option>
+                      <option>D3</option>
+                      <option>D4</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Graduation */}
+              <div style={{ background: "white", borderRadius: 14, padding: "16px 18px", border: `1px solid ${NYU.gray100}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: NYU.purple, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Graduation</div>
+                <div>
+                  <label style={labelStyle}>Expected Graduation Date</label>
+                  <input type="date" style={inputStyle} value={settingsDraft.graduationDate} onChange={e => setSettingsDraft(p => ({...p, graduationDate: e.target.value}))} />
+                  <div style={{ fontSize: 11, color: NYU.gray400, marginTop: 6 }}>
+                    Used to calculate your graduation velocity and pace tracking.
+                  </div>
+                </div>
+              </div>
+
+              {/* Clinic Schedule */}
+              <div style={{ background: "white", borderRadius: 14, padding: "16px 18px", border: `1px solid ${NYU.gray100}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: NYU.purple, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Clinic Schedule</div>
+                <div style={{ fontSize: 12, color: NYU.gray400, marginBottom: 14 }}>Set which days you have clinic and your hours. Used by the calendar.</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(day => {
+                    const sched = settingsDraft.clinicSchedule?.[day] || { enabled: false, start: "09:00", end: "17:00" };
+                    return (
+                      <div key={day} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {/* Toggle */}
+                        <div onClick={() => setSettingsDraft(p => ({ ...p, clinicSchedule: { ...p.clinicSchedule, [day]: { ...sched, enabled: !sched.enabled } } }))}
+                          style={{ width: 36, height: 20, borderRadius: 99, background: sched.enabled ? NYU.purple : NYU.gray200, cursor: "pointer", position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+                          <div style={{ position: "absolute", top: 2, left: sched.enabled ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "white", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                        </div>
+                        {/* Day name */}
+                        <span style={{ fontSize: 13, fontWeight: 600, color: sched.enabled ? NYU.gray900 : NYU.gray400, width: 90, textTransform: "capitalize" }}>{day}</span>
+                        {/* Time inputs */}
+                        {sched.enabled ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                            <input type="time" value={sched.start}
+                              onChange={e => setSettingsDraft(p => ({ ...p, clinicSchedule: { ...p.clinicSchedule, [day]: { ...sched, start: e.target.value } } }))}
+                              style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, flex: 1 }} />
+                            <span style={{ fontSize: 12, color: NYU.gray400 }}>to</span>
+                            <input type="time" value={sched.end}
+                              onChange={e => setSettingsDraft(p => ({ ...p, clinicSchedule: { ...p.clinicSchedule, [day]: { ...sched, end: e.target.value } } }))}
+                              style={{ ...inputStyle, padding: "5px 8px", fontSize: 12, flex: 1 }} />
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 12, color: NYU.gray200, fontStyle: "italic" }}>No clinic</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* App info */}
+              <div style={{ background: NYU.gray50, borderRadius: 14, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: NYU.gray900 }}>ClinIQ</div>
+                  <div style={{ fontSize: 11, color: NYU.gray400, marginTop: 2 }}>NYU College of Dentistry · Capstone v1.0</div>
+                </div>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${NYU.purple}, ${NYU.accent})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ color: "white", fontSize: 16, fontWeight: 700 }}>C</span>
+                </div>
+              </div>
+
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+              <button className="action-btn" onClick={() => setShowSettings(false)} style={{ flex: 1, background: "white", color: NYU.gray600, border: `1.5px solid ${NYU.gray200}` }}>Cancel</button>
+              <button className="action-btn" onClick={() => {
+                setUser(p => ({ ...p, name: settingsDraft.name, year: settingsDraft.year }));
+                setGraduationDateStr(settingsDraft.graduationDate);
+                if (settingsDraft.clinicSchedule) setClinicSchedule(settingsDraft.clinicSchedule);
+                setShowSettings(false);
+              }} style={{ flex: 1, background: NYU.purple, color: "white" }}>Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
     </>
   );
