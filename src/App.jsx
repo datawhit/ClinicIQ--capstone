@@ -167,25 +167,59 @@ const getLabNudge = (patient) => {
 
 const predictCompletion = (patient) => {
   if (patient.treatmentComplete) return null;
-  if (!patient.treatmentStart) return null;
   const visitLog = patient.visitLog || [];
   const benchmark = DISCIPLINE_BENCHMARKS[patient.discipline]?.visits || 3;
   const visitsLogged = visitLog.length;
   const visitsRemaining = Math.max(0, benchmark - visitsLogged);
-  if (visitsRemaining === 0) return { date:"Soon", label:"Final visit approaching", daysOut:0 };
-  let avgInterval = 21;
+
+  if (visitsRemaining === 0) {
+    return { date:"Soon", label:"Ready for completion", daysOut:0, confidence:"high", factors:[], benchmark, visitsLogged, visitsRemaining };
+  }
+
+  // ── Average interval from actual visit history ────────────────────────────
+  let avgInterval = 21; // default 3-week cadence
   if (visitLog.length >= 2) {
     const sorted = [...visitLog].sort((a,b) => new Date(a.date)-new Date(b.date));
     const intervals = [];
     for (let i=1;i<sorted.length;i++) intervals.push((new Date(sorted[i].date)-new Date(sorted[i-1].date))/86400000);
     avgInterval = Math.round(intervals.reduce((a,b)=>a+b,0)/intervals.length);
   }
-  const daysOut = visitsRemaining * avgInterval;
-  const projected = new Date(Date.now() + daysOut * 86400000);
+
+  // ── Base estimate — anchor from next appointment if scheduled ────────────
+  let baseDaysFromToday;
+  if (patient.nextAppt) {
+    const apptDate = new Date(patient.nextAppt);
+    const daysToAppt = Math.max(0, Math.round((apptDate - new Date()) / 86400000));
+    const remainingAfterAppt = Math.max(0, visitsRemaining - 1);
+    baseDaysFromToday = daysToAppt + remainingAfterAppt * avgInterval;
+  } else {
+    baseDaysFromToday = visitsRemaining * avgInterval;
+  }
+
+  // ── Delay factors from lab & pre-auth status ─────────────────────────────
+  const factors = [];
+  if (patient.labStatus === "Pending")
+    factors.push({ label:"Lab work pending", days:14, icon:"🧪" });
+  else if (patient.labStatus === "Sent")
+    factors.push({ label:"Lab sent — awaiting result", days:7, icon:"🧪" });
+  if (patient.preAuth === "Submitted")
+    factors.push({ label:"Pre-auth pending approval", days:21, icon:"📋" });
+  else if (patient.preAuth === "Denied")
+    factors.push({ label:"Pre-auth denied — refile needed", days:30, icon:"⚠️" });
+
+  const delayDays = factors.reduce((sum,f) => sum+f.days, 0);
+  const totalDays = baseDaysFromToday + delayDays;
+
+  const projected  = new Date(Date.now() + totalDays * 86400000);
+  const bestCase   = new Date(Date.now() + baseDaysFromToday * 86400000);
+  const confidence = visitLog.length >= 3 ? "high" : visitLog.length >= 1 ? "medium" : "low";
+
   return {
     date: projected.toISOString().split("T")[0],
+    bestCaseDate: delayDays > 0 ? bestCase.toISOString().split("T")[0] : null,
     label:`${benchmark} visits typical · ${visitsLogged} done · ${visitsRemaining} remaining`,
-    daysOut, avgInterval, visitsRemaining, benchmark,
+    daysOut:totalDays, avgInterval, visitsRemaining, benchmark, visitsLogged,
+    factors, confidence, delayDays,
   };
 };
 
@@ -423,6 +457,7 @@ export default function App() {
   const [settingsDraft, setSettingsDraft] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPatient, setNewPatient] = useState(emptyPatient);
+  const [addPatientError, setAddPatientError] = useState("");
   const [showLogModal, setShowLogModal] = useState(null);
   const [newVisit, setNewVisit] = useState({ date:"", procedure:"", notes:"", nextAppt:"", cdtCode:"" });
   const [nlpInput, setNlpInput] = useState("");
@@ -538,18 +573,28 @@ export default function App() {
   };
 
   const addPatient = async () => {
-    if (!newPatient.chartNumber) return;
+    if (!newPatient.chartNumber.trim()) {
+      setAddPatientError("Chart number is required to add a patient.");
+      return;
+    }
+    setAddPatientError("");
     try {
       const res = await fetch("/api/patients", {
         method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(newPatient)
       });
-      if (res.ok) {
-        const created = await res.json();
-        setPatients(prev => [...prev, created]);
+      const data = await res.json();
+      if (!res.ok) {
+        setAddPatientError(data.error || "Failed to add patient. Please try again.");
+        return;
       }
-    } catch (err) { console.error("Add patient failed:", err); }
-    setNewPatient(emptyPatient);
-    setShowAddModal(false);
+      setPatients(prev => [...prev, data]);
+      setNewPatient(emptyPatient);
+      setAddPatientError("");
+      setShowAddModal(false);
+    } catch (err) {
+      console.error("Add patient failed:", err);
+      setAddPatientError("Connection error. Please try again.");
+    }
   };
 
   const logVisit = async (id) => {
@@ -1852,22 +1897,30 @@ RESPONSE RULES:
 
       {/* ── ADD PATIENT MODAL ── */}
       {showAddModal&&(
-        <div className="modal-overlay" onClick={()=>setShowAddModal(false)}>
+        <div className="modal-overlay" onClick={()=>{ setShowAddModal(false); setAddPatientError(""); setNewPatient(emptyPatient); }}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
               <h2 style={{ fontSize:18,fontWeight:700,color:NYU.gray900,fontFamily:"'Fraunces', serif" }}>Add New Patient</h2>
-              <button onClick={()=>setShowAddModal(false)} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:NYU.gray400 }}>×</button>
+              <button onClick={()=>{ setShowAddModal(false); setAddPatientError(""); setNewPatient(emptyPatient); }} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:NYU.gray400 }}>×</button>
             </div>
             <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
-              <div><label style={labelStyle}>Chart Number *</label><input style={inputStyle} placeholder="e.g. 1047823" value={newPatient.chartNumber} onChange={e=>setNewPatient(p=>({...p,chartNumber:e.target.value}))}/></div>
+              <div>
+                <label style={labelStyle}>Chart Number *</label>
+                <input style={{ ...inputStyle, borderColor: addPatientError&&!newPatient.chartNumber.trim() ? NYU.red : undefined }} placeholder="e.g. 1047823" value={newPatient.chartNumber} onChange={e=>{ setNewPatient(p=>({...p,chartNumber:e.target.value})); setAddPatientError(""); }}/>
+              </div>
               <div><label style={labelStyle}>Clinical Discipline</label><select style={inputStyle} value={newPatient.discipline} onChange={e=>setNewPatient(p=>({...p,discipline:e.target.value}))}>{DISCIPLINES.map(d=><option key={d} value={d}>{d}</option>)}</select></div>
               <div><label style={labelStyle}>First Procedure</label><input style={inputStyle} placeholder="e.g. Initial Exam..." value={newPatient.procedure} onChange={e=>setNewPatient(p=>({...p,procedure:e.target.value}))}/></div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
                 <div><label style={labelStyle}>Treatment Start</label><input type="date" style={inputStyle} value={newPatient.treatmentStart} onChange={e=>setNewPatient(p=>({...p,treatmentStart:e.target.value,lastVisit:e.target.value}))}/></div>
                 <div><label style={labelStyle}>Expected Completion</label><input type="date" style={inputStyle} value={newPatient.expectedCompletion} onChange={e=>setNewPatient(p=>({...p,expectedCompletion:e.target.value}))}/></div>
               </div>
+              {addPatientError && (
+                <div style={{ background:NYU.redLight,borderRadius:10,padding:"10px 14px",fontSize:13,color:NYU.red,display:"flex",alignItems:"center",gap:8 }}>
+                  <span>⚠️</span><span>{addPatientError}</span>
+                </div>
+              )}
               <div style={{ display:"flex",gap:10,marginTop:4 }}>
-                <button className="action-btn" onClick={()=>setShowAddModal(false)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>Cancel</button>
+                <button className="action-btn" onClick={()=>{ setShowAddModal(false); setAddPatientError(""); setNewPatient(emptyPatient); }} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>Cancel</button>
                 <button className="action-btn" onClick={addPatient} style={{ flex:1,background:T.purple,color:"white" }}>Add Patient</button>
               </div>
             </div>
@@ -2010,25 +2063,77 @@ RESPONSE RULES:
                     <div>
                       <div style={{ fontSize:11,color:NYU.gray400,fontWeight:500,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em" }}>Next Appointment</div>
                       <input type="date" value={patient.nextAppt||""} onChange={e=>updateField(patient.id,"nextAppt",e.target.value||null)} style={{ ...inputStyle,fontSize:13,padding:"8px 10px",color:patient.nextAppt?T.purple:NYU.gray400 }}/>
-                      {/* Suggested next appt from prediction */}
                       {prediction&&prediction.daysOut>0&&!patient.nextAppt&&(
                         <button onClick={()=>updateField(patient.id,"nextAppt",prediction.date)}
                           style={{ marginTop:6,fontSize:11,fontWeight:600,color:T.purple,background:T.lavender,border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"4px 12px",cursor:"pointer",fontFamily:"'Inter', sans-serif",display:"flex",alignItems:"center",gap:5,width:"100%" }}>
-                          🔮 Use suggested: {prediction.date}
+                          🔮 Suggested next: {prediction.date}
                         </button>
-                      )}
-                      {prediction&&prediction.daysOut>0&&patient.nextAppt&&(
-                        <div style={{ fontSize:11,color:NYU.gray400,marginTop:5 }}>
-                          🔮 Predicted completion: {prediction.date} · {prediction.label}
-                        </div>
-                      )}
-                      {!prediction&&!patient.treatmentComplete&&(
-                        <div style={{ fontSize:11,color:NYU.gray400,marginTop:5 }}>Log a visit to get a suggested date</div>
                       )}
                     </div>
                   </div>
                 </div>
               ); })()}
+
+              {/* ── Predictive Analytics Card ── */}
+              {(()=>{
+                const pred = predictCompletion(patient);
+                if (!pred) return null;
+                const confColor = pred.confidence==="high" ? NYU.green : pred.confidence==="medium" ? NYU.amber : NYU.gray400;
+                const confBg    = pred.confidence==="high" ? "#dcfce7" : pred.confidence==="medium" ? "#fef3c7" : NYU.gray100;
+                const confLabel = pred.confidence==="high" ? "High confidence" : pred.confidence==="medium" ? "Medium confidence" : "Low confidence";
+                const visitPct  = pred.benchmark > 0 ? Math.min(100, Math.round((pred.visitsLogged / pred.benchmark) * 100)) : 0;
+                return (
+                  <div style={{ background:`linear-gradient(135deg, ${T.purpleDeep}, ${T.purpleDark})`,borderRadius:16,padding:"18px 20px",marginBottom:16,color:"white" }}>
+                    <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+                      <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                        <span style={{ fontSize:16 }}>🔮</span>
+                        <span style={{ fontWeight:700,fontSize:13 }}>Completion Estimate</span>
+                      </div>
+                      <span style={{ fontSize:11,fontWeight:600,color:confColor,background:confBg,borderRadius:99,padding:"3px 10px" }}>{confLabel}</span>
+                    </div>
+
+                    {pred.daysOut===0 ? (
+                      <div style={{ fontSize:20,fontWeight:700,marginBottom:4 }}>Ready for completion ✓</div>
+                    ) : (
+                      <>
+                        <div style={{ marginBottom:12 }}>
+                          <div style={{ fontSize:11,opacity:0.7,marginBottom:3,textTransform:"uppercase",letterSpacing:"0.06em" }}>Projected date</div>
+                          <div style={{ fontSize:22,fontWeight:700,letterSpacing:"-0.02em" }}>{pred.date}</div>
+                          {pred.bestCaseDate && (
+                            <div style={{ fontSize:12,opacity:0.75,marginTop:3 }}>
+                              Best case (no delays): <span style={{ fontWeight:600 }}>{pred.bestCaseDate}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Visit progress bar */}
+                        <div style={{ marginBottom:pred.factors.length>0?12:0 }}>
+                          <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,opacity:0.8,marginBottom:5 }}>
+                            <span>Visit progress</span>
+                            <span>{pred.visitsLogged} / {pred.benchmark} visits · {pred.avgInterval}d avg interval</span>
+                          </div>
+                          <div style={{ background:"rgba(255,255,255,0.2)",borderRadius:99,height:6,overflow:"hidden" }}>
+                            <div style={{ width:`${visitPct}%`,height:"100%",background:"rgba(255,255,255,0.85)",borderRadius:99,transition:"width 0.5s ease" }}/>
+                          </div>
+                        </div>
+
+                        {/* Delay factors */}
+                        {pred.factors.length>0 && (
+                          <div style={{ borderTop:"1px solid rgba(255,255,255,0.15)",paddingTop:10,marginTop:2 }}>
+                            <div style={{ fontSize:11,opacity:0.7,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.06em" }}>Active delays (+{pred.delayDays}d total)</div>
+                            {pred.factors.map((f,i)=>(
+                              <div key={i} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,marginBottom:4 }}>
+                                <span style={{ opacity:0.9 }}>{f.icon} {f.label}</span>
+                                <span style={{ fontWeight:600,background:"rgba(255,255,255,0.15)",borderRadius:99,padding:"2px 8px" }}>+{f.days}d</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Lab & Pre-Auth with date fields + nudge indicators */}
               <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
