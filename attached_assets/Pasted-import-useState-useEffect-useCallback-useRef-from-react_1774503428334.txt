@@ -28,30 +28,6 @@ const NYU = {
   lavender: "#f5f0ff",
 };
 
-const THEMES = {
-  "nyu-purple": { name:"NYU Purple",  emoji:"🟣", purple:"#6B21A8", purpleDark:"#581c87", purpleDeep:"#3b0764", purpleLight:"#faf5ff", purpleMid:"#9333ea", accent:"#7c3aed", lavender:"#f5f0ff" },
-  "ocean":      { name:"Ocean Blue",  emoji:"🔵", purple:"#1d4ed8", purpleDark:"#1e40af", purpleDeep:"#1e3a8a", purpleLight:"#eff6ff", purpleMid:"#3b82f6", accent:"#2563eb", lavender:"#eff6ff" },
-  "forest":     { name:"Forest",      emoji:"🟢", purple:"#047857", purpleDark:"#065f46", purpleDeep:"#022c22", purpleLight:"#ecfdf5", purpleMid:"#059669", accent:"#10b981", lavender:"#ecfdf5" },
-  "rose":       { name:"Rose",        emoji:"🩷", purple:"#be185d", purpleDark:"#9d174d", purpleDeep:"#500724", purpleLight:"#fdf2f8", purpleMid:"#ec4899", accent:"#f472b6", lavender:"#fdf2f8" },
-  "slate":      { name:"Slate",       emoji:"⚫", purple:"#334155", purpleDark:"#1e293b", purpleDeep:"#0f172a", purpleLight:"#f8fafc", purpleMid:"#475569", accent:"#64748b", lavender:"#f1f5f9" },
-  "amber":      { name:"Amber",       emoji:"🟡", purple:"#b45309", purpleDark:"#92400e", purpleDeep:"#451a03", purpleLight:"#fffbeb", purpleMid:"#d97706", accent:"#f59e0b", lavender:"#fef9c3" },
-};
-
-const TAB_DEFS = {
-  roster:       { label:"👤  Patient Roster" },
-  requirements: { label:"🎓  Graduation Goals" },
-  calendar:     { label:"📅  Calendar" },
-  notebook:     { label:"📓  Notebook" },
-};
-const DEFAULT_TAB_ORDER = ["roster","requirements","calendar","notebook"];
-const STAT_DEFS = [
-  { id:"total",    label:"Total Patients" },
-  { id:"active",   label:"Active" },
-  { id:"urgent",   label:"Needs Attention" },
-  { id:"complete", label:"Complete" },
-  { id:"preauth",  label:"Pre-Auth Alerts" },
-];
-
 const DISCIPLINES = [
   "Comprehensive Care","Endodontics","Oral & Maxillofacial Surgery",
   "Orthodontics","Pediatric Dentistry","Periodontics","Prosthodontics",
@@ -239,6 +215,11 @@ const calculateStatus = (patient) => {
   return "Active";
 };
 
+const STATUS_META = {
+  Active:{ color:NYU.green, bg:"#dcfce7" },
+  "F/U Appt Needed":{ color:NYU.amber, bg:"#fef3c7" },
+  "Treatment Complete":{ color:NYU.purple, bg:NYU.purpleLight },
+};
 const LAB_META = {
   None:{ color:NYU.gray400, bg:NYU.gray100 },
   Pending:{ color:NYU.amber, bg:"#fef3c7" },
@@ -349,12 +330,12 @@ const css = `
   .action-btn:hover { opacity: 0.92; transform: translateY(-1px); }
   .action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
   input, select, textarea { font-family: 'Inter', sans-serif; outline: none; }
-  input:focus, select:focus, textarea:focus { border-color: var(--t-mid) !important; box-shadow: 0 0 0 3px rgba(107,33,168,0.08); }
+  input:focus, select:focus, textarea:focus { border-color: ${NYU.purpleMid} !important; box-shadow: 0 0 0 3px rgba(107,33,168,0.08); }
   .modal-overlay { position: fixed; inset: 0; background: rgba(30,20,40,0.45); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fadeIn 0.15s ease; }
   .modal-box { background: white; border-radius: 24px; padding: 28px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 32px 80px rgba(107,33,168,0.15); animation: slideUp 0.22s ease; }
   .progress-bar { height: 6px; border-radius: 99px; background: ${NYU.gray100}; overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
-  .nlp-box { background: linear-gradient(135deg, var(--t-deep), var(--t-dark)); border-radius: 16px; padding: 16px; margin-bottom: 4px; }
+  .nlp-box { background: linear-gradient(135deg, ${NYU.purpleDeep}, ${NYU.purpleDark}); border-radius: 16px; padding: 16px; margin-bottom: 4px; }
   .nlp-parsed { background: ${NYU.greenLight}; border: 1px solid #6ee7b7; border-radius: 12px; padding: 12px 14px; margin-top: 8px; animation: slideUp 0.2s ease; }
   .section-label { font-size: 11px; font-weight: 600; color: ${NYU.gray400}; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 12px; }
   @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
@@ -374,7 +355,7 @@ const css = `
   }
 `;
 
-const NoteCard = ({ note, active, onClick, activeBg="#f5f0ff" }) => {
+const NoteCard = ({ note, active, onClick }) => {
   const catColors = {
     "Clinical":{ color:"#0369a1", bg:"#e0f2fe" },
     "Patient": { color:"#6d28d9", bg:"#f3e8ff" },
@@ -383,7 +364,7 @@ const NoteCard = ({ note, active, onClick, activeBg="#f5f0ff" }) => {
   };
   const cat = catColors[note.category] || catColors["General"];
   return (
-    <div onClick={onClick} style={{ padding:"12px 14px", borderRadius:12, marginBottom:6, cursor:"pointer", background:active?activeBg:"white", border:`1px solid ${active?NYU.gray200:NYU.gray100}`, transition:"all 0.15s" }}>
+    <div onClick={onClick} style={{ padding:"12px 14px", borderRadius:12, marginBottom:6, cursor:"pointer", background:active?NYU.lavender:"white", border:`1px solid ${active?NYU.gray200:NYU.gray100}`, transition:"all 0.15s" }}>
       <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
         {note.pinned && <span style={{ fontSize:10 }}>📌</span>}
         <span style={{ fontSize:10, fontWeight:600, color:cat.color, background:cat.bg, borderRadius:99, padding:"2px 8px" }}>{note.category}</span>
@@ -463,19 +444,6 @@ export default function App() {
   const [dragIndex, setDragIndex] = useState(null);
   const [newDisciplineName, setNewDisciplineName] = useState("");
   const [graduationDateStr, setGraduationDateStr] = useState("2026-05-15");
-  const [themePreset, setThemePreset] = useState("nyu-purple");
-  const [dashTabOrder, setDashTabOrder] = useState(DEFAULT_TAB_ORDER);
-  const [visibleStats, setVisibleStats] = useState(STAT_DEFS.map(s=>s.id));
-
-  // ── Theme ─────────────────────────────────────────────────────────────────────
-  const T = { ...NYU, ...(THEMES[themePreset] || THEMES["nyu-purple"]) };
-  const themeVars = `:root{--t-purple:${T.purple};--t-dark:${T.purpleDark};--t-deep:${T.purpleDeep};--t-light:${T.purpleLight};--t-mid:${T.purpleMid};--t-accent:${T.accent};--t-lav:${T.lavender}}`;
-
-  const STATUS_META = {
-    Active:{ color:NYU.green, bg:"#dcfce7" },
-    "F/U Appt Needed":{ color:NYU.amber, bg:"#fef3c7" },
-    "Treatment Complete":{ color:T.purple, bg:T.purpleLight },
-  };
 
   // ── API helpers ──────────────────────────────────────────────────────────────
   const saveTimers = useRef({});
@@ -494,9 +462,6 @@ export default function App() {
         if (s.graduationDate) setGraduationDateStr(s.graduationDate);
         if (s.customGoals && s.customGoals.length > 0) setCustomGoals(s.customGoals);
         if (s.clinicSchedule && Object.keys(s.clinicSchedule).length > 0) setClinicSchedule(s.clinicSchedule);
-        if (s.themePreset && THEMES[s.themePreset]) setThemePreset(s.themePreset);
-        if (s.dashTabOrder && s.dashTabOrder.length > 0) setDashTabOrder(s.dashTabOrder);
-        if (s.visibleStats && s.visibleStats.length > 0) setVisibleStats(s.visibleStats);
       }
     } catch (err) {
       console.error("Failed to load data:", err);
@@ -798,23 +763,22 @@ RESPONSE RULES:
   const allLabNudges = patients.filter(p=>getLabNudge(p)!==null);
   const hasNudges = allPreAuthNudges.length>0 || allLabNudges.length>0;
 
-  const statsAll = [
-    { id:"total",    label:"Total Patients", value:patients.length, color:T.purple },
-    { id:"active",   label:"Active", value:patients.filter(p=>calculateStatus(p)==="Active").length, color:NYU.green },
-    { id:"urgent",   label:"Needs Attention", value:urgentPatients.length, color:NYU.orange },
-    { id:"complete", label:"Complete", value:patients.filter(p=>calculateStatus(p)==="Treatment Complete").length, color:T.purpleMid },
-    { id:"preauth",  label:"Pre-Auth Alerts", value:allPreAuthNudges.length+allLabNudges.length, color:NYU.blue },
+  const stats = [
+    { label:"Total Patients", value:patients.length, color:NYU.purple },
+    { label:"Active", value:patients.filter(p=>calculateStatus(p)==="Active").length, color:NYU.green },
+    { label:"Needs Attention", value:urgentPatients.length, color:NYU.orange },
+    { label:"Complete", value:patients.filter(p=>calculateStatus(p)==="Treatment Complete").length, color:NYU.purpleMid },
+    { label:"Pre-Auth Alerts", value:allPreAuthNudges.length+allLabNudges.length, color:NYU.blue },
   ];
-  const stats = statsAll.filter(s=>visibleStats.includes(s.id));
 
   // ── App Loading Screen ──
   if (appLoading) {
     return (
       <>
-        <style>{css}</style><style>{themeVars}</style>
+        <style>{css}</style>
         <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #f8f6fb 0%, #ede8f5 100%)", display:"flex", alignItems:"center", justifyContent:"center" }}>
           <div style={{ textAlign:"center" }}>
-            <div style={{ width:48, height:48, borderRadius:14, background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px" }}>
+            <div style={{ width:48, height:48, borderRadius:14, background:`linear-gradient(135deg, ${NYU.purple}, ${NYU.accent})`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px" }}>
               <span style={{ color:"white", fontSize:20, fontWeight:700 }}>C</span>
             </div>
             <div style={{ fontSize:14, color:NYU.gray400 }}>Loading ClinIQ…</div>
@@ -828,11 +792,11 @@ RESPONSE RULES:
   if (!user) {
     return (
       <>
-        <style>{css}</style><style>{themeVars}</style>
+        <style>{css}</style>
         <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #f8f6fb 0%, #ede8f5 100%)", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ width:"100%", maxWidth:420 }}>
             <div style={{ textAlign:"center", marginBottom:40 }}>
-              <div style={{ width:56, height:56, borderRadius:16, background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px" }}>
+              <div style={{ width:56, height:56, borderRadius:16, background:`linear-gradient(135deg, ${NYU.purple}, ${NYU.accent})`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px" }}>
                 <span style={{ color:"white", fontSize:24, fontWeight:700 }}>C</span>
               </div>
               <h1 style={{ fontFamily:"'Fraunces', serif", fontSize:28, fontWeight:700, color:NYU.gray900, letterSpacing:"-0.02em" }}>ClinIQ</h1>
@@ -853,7 +817,7 @@ RESPONSE RULES:
                   <div style={{ fontSize:11, color:NYU.gray400, marginTop:6 }}>D1 and D2 students do not have active patient access.</div>
                 </div>
                 {loginError && <div style={{ background:NYU.redLight, borderRadius:10, padding:"10px 14px", fontSize:13, color:NYU.red }}>{loginError}</div>}
-                <button className="action-btn" onClick={handleLogin} disabled={loginLoading} style={{ background:T.purple, color:"white", width:"100%", marginTop:4, padding:"13px 20px", fontSize:15, opacity:loginLoading?0.7:1 }}>{loginLoading?<><span className="spinner"/>Signing in…</>:"Sign In"}</button>
+                <button className="action-btn" onClick={handleLogin} disabled={loginLoading} style={{ background:NYU.purple, color:"white", width:"100%", marginTop:4, padding:"13px 20px", fontSize:15, opacity:loginLoading?0.7:1 }}>{loginLoading?<><span className="spinner"/>Signing in…</>:"Sign In"}</button>
               </div>
               <p style={{ fontSize:11, color:NYU.gray400, textAlign:"center", marginTop:20, lineHeight:1.5 }}>
                 Production version will authenticate via NYU SSO.<br/>Patient data uses HIPAA-safe identifiers — no PHI stored or transmitted.
@@ -867,7 +831,7 @@ RESPONSE RULES:
 
   return (
     <>
-      <style>{css}</style><style>{themeVars}</style>
+      <style>{css}</style>
       <div style={{ minHeight:"100vh", background:NYU.gray50 }}>
 
         {/* Top Header */}
@@ -882,7 +846,7 @@ RESPONSE RULES:
                   <rect x="3" y="13.5" width="14" height="1.5" rx="0.75" fill={NYU.gray600}/>
                 </svg>
               </button>
-              <div style={{ width:30, height:30, borderRadius:10, background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <div style={{ width:30, height:30, borderRadius:10, background:`linear-gradient(135deg, ${NYU.purple}, ${NYU.accent})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
                 <span style={{ color:"white", fontSize:14, fontWeight:700 }}>C</span>
               </div>
               <span style={{ color:NYU.gray900, fontSize:16, fontWeight:700, fontFamily:"'Fraunces', serif", letterSpacing:"-0.02em" }}>ClinIQ</span>
@@ -933,8 +897,8 @@ RESPONSE RULES:
               <span style={{ fontSize:13, color:NYU.gray400 }}>{user?.year} · {user?.name}</span>
               <button onClick={()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setShowSettings(true); }} style={{ background:"none", border:"none", cursor:"pointer", padding:6, borderRadius:8, color:NYU.gray400, fontSize:16 }}>⚙️</button>
               <button onClick={handleLogout} style={{ background:NYU.gray100, border:"none", borderRadius:99, padding:"5px 14px", cursor:"pointer", color:NYU.gray600, fontSize:12, fontWeight:600, fontFamily:"'Inter', sans-serif" }}>Sign Out</button>
-              <div style={{ width:32, height:32, borderRadius:"50%", background:T.lavender, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <span style={{ color:T.purple, fontSize:13, fontWeight:700 }}>{user?.name?.[0]||"?"}</span>
+              <div style={{ width:32, height:32, borderRadius:"50%", background:NYU.lavender, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <span style={{ color:NYU.purple, fontSize:13, fontWeight:700 }}>{user?.name?.[0]||"?"}</span>
               </div>
             </div>
           </div>
@@ -953,7 +917,7 @@ RESPONSE RULES:
             {tab!=="notebook"&&tab!=="calendar"&&(
               <div style={{ display:"flex", gap:8 }}>
                 <button className="action-btn" onClick={exportRoster} style={{ background:NYU.gray100, color:NYU.gray600, fontSize:12, padding:"8px 14px" }}>↓ Export</button>
-                <button className="action-btn" onClick={()=>setShowAddModal(true)} style={{ background:T.purple, color:"white", fontSize:12, padding:"8px 16px" }}>+ Add Patient</button>
+                <button className="action-btn" onClick={()=>setShowAddModal(true)} style={{ background:NYU.purple, color:"white", fontSize:12, padding:"8px 16px" }}>+ Add Patient</button>
               </div>
             )}
           </div>
@@ -972,7 +936,7 @@ RESPONSE RULES:
 
           {/* ── CASELOAD INTELLIGENCE PANEL (replaces both velocity banner + urgent banner) ── */}
           {tab!=="notebook"&&tab!=="calendar"&&(
-            <div className="card" style={{ padding:"20px 24px", marginBottom:24, background:onTrack?T.lavender:NYU.redLight, border:`1px solid ${onTrack?NYU.gray200:"#fecaca"}` }}>
+            <div className="card" style={{ padding:"20px 24px", marginBottom:24, background:onTrack?NYU.lavender:NYU.redLight, border:`1px solid ${onTrack?NYU.gray200:"#fecaca"}` }}>
 
               {/* Top row: progress + percentage */}
               <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap", marginBottom:16 }}>
@@ -1119,10 +1083,9 @@ RESPONSE RULES:
 
           {/* Tab Nav */}
           <div style={{ borderBottom:`1.5px solid ${NYU.gray100}`, marginBottom:24, display:"flex", gap:0 }}>
-            {dashTabOrder.map(key=>{
-              const def=TAB_DEFS[key]; if(!def) return null;
-              return <button key={key} onClick={()=>setTab(key)} style={{ background:"none", border:"none", borderBottom:tab===key?`2px solid ${T.purple}`:"2px solid transparent", cursor:"pointer", fontFamily:"'Inter', sans-serif", fontSize:14, fontWeight:tab===key?600:400, padding:"10px 20px", marginBottom:-2, color:tab===key?T.purple:NYU.gray400, transition:"all 0.15s" }}>{def.label}</button>;
-            })}
+            {[["roster","👤  Patient Roster"],["requirements","🎓  Graduation Goals"],["calendar","📅  Calendar"],["notebook","📓  Notebook"]].map(([key,label])=>(
+              <button key={key} onClick={()=>setTab(key)} style={{ background:"none", border:"none", borderBottom:tab===key?`2px solid ${NYU.purple}`:"2px solid transparent", cursor:"pointer", fontFamily:"'Inter', sans-serif", fontSize:14, fontWeight:tab===key?600:400, padding:"10px 20px", marginBottom:-2, color:tab===key?NYU.purple:NYU.gray400, transition:"all 0.15s" }}>{label}</button>
+            ))}
           </div>
 
           {/* ── ROSTER TAB ── */}
@@ -1130,7 +1093,7 @@ RESPONSE RULES:
             <>
               <div className="filter-row" style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
                 {["All","Active","Urgent","F/U Needed","Complete"].map(f=>(
-                  <button key={f} className="filter-btn" onClick={()=>setFilter(f)} style={{ background:filter===f?T.purple:NYU.gray100, color:filter===f?"white":NYU.gray600, border:"none", fontSize:12, padding:"6px 14px" }}>{f}</button>
+                  <button key={f} className="filter-btn" onClick={()=>setFilter(f)} style={{ background:filter===f?NYU.purple:NYU.gray100, color:filter===f?"white":NYU.gray600, border:"none", fontSize:12, padding:"6px 14px" }}>{f}</button>
                 ))}
               </div>
 
@@ -1147,7 +1110,7 @@ RESPONSE RULES:
                   const meta = STATUS_META[status]||{ color:NYU.gray400, bg:NYU.gray100 };
                   const urgency = calculateUrgency(patient);
                   const daysToCompletion = daysUntil(patient.expectedCompletion);
-                  const avatarMeta = DISCIPLINE_AVATAR[patient.discipline]||{ bg:T.lavender, color:T.purple, initial:"??" };
+                  const avatarMeta = DISCIPLINE_AVATAR[patient.discipline]||{ bg:NYU.lavender, color:NYU.purple, initial:"??" };
                   const preAuthNudge = getPreAuthNudge(patient);
                   const labNudge = getLabNudge(patient);
 
@@ -1174,7 +1137,7 @@ RESPONSE RULES:
                             {labNudge&&<span style={{ fontSize:10, fontWeight:600, color:labNudge.color, background:labNudge.bg, borderRadius:99, padding:"2px 8px" }}>🧪 {labNudge.label}</span>}
                           </div>
                         )}
-                        {patient.nextAppt&&<div style={{ fontSize:11, color:T.purple, marginTop:3, fontWeight:500 }}>📅 {patient.nextAppt}</div>}
+                        {patient.nextAppt&&<div style={{ fontSize:11, color:NYU.purple, marginTop:3, fontWeight:500 }}>📅 {patient.nextAppt}</div>}
                       </div>
                       {/* Right */}
                       <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6, flexShrink:0 }}>
@@ -1214,8 +1177,8 @@ RESPONSE RULES:
             if(calCombinedView) patients.filter(p=>p.handoffPartner).forEach(p=>{ if(p.nextAppt){ if(!pairedApptMap[p.nextAppt]) pairedApptMap[p.nextAppt]=[]; pairedApptMap[p.nextAppt].push({ alias:p.alias,procedure:p.procedure,discipline:p.discipline,provider:p.handoffPartner,providerYear:p.handoffPartnerYear }); } });
 
             const apptMap={};
-            patients.forEach(p=>{ if(p.nextAppt){ if(!apptMap[p.nextAppt]) apptMap[p.nextAppt]=[]; apptMap[p.nextAppt].push({ type:"confirmed",patient:p,duration:PROCEDURE_DURATIONS[p.procedure]||PROCEDURE_DURATIONS.default,label:p.alias,sublabel:p.procedure||p.discipline,time:p.nextApptTime||"",color:T.purple,bg:T.purpleLight }); } });
-            patients.filter(p=>!p.treatmentComplete&&!p.nextAppt).forEach(p=>{ const pred=predictCompletion(p); if(!pred||!p.lastVisit) return; const avgInterval=pred.avgInterval||21; const suggestedDate=fmt(addDays(new Date(p.lastVisit),avgInterval)); if(!apptMap[suggestedDate]) apptMap[suggestedDate]=[]; apptMap[suggestedDate].push({ type:"suggested",patient:p,duration:PROCEDURE_DURATIONS[p.procedure]||PROCEDURE_DURATIONS.default,label:`Schedule ${p.alias}`,sublabel:`Suggested · ${p.discipline}`,time:"",color:T.purpleMid,bg:"#f3e8ff" }); });
+            patients.forEach(p=>{ if(p.nextAppt){ if(!apptMap[p.nextAppt]) apptMap[p.nextAppt]=[]; apptMap[p.nextAppt].push({ type:"confirmed",patient:p,duration:PROCEDURE_DURATIONS[p.procedure]||PROCEDURE_DURATIONS.default,label:p.alias,sublabel:p.procedure||p.discipline,time:p.nextApptTime||"",color:NYU.purple,bg:NYU.purpleLight }); } });
+            patients.filter(p=>!p.treatmentComplete&&!p.nextAppt).forEach(p=>{ const pred=predictCompletion(p); if(!pred||!p.lastVisit) return; const avgInterval=pred.avgInterval||21; const suggestedDate=fmt(addDays(new Date(p.lastVisit),avgInterval)); if(!apptMap[suggestedDate]) apptMap[suggestedDate]=[]; apptMap[suggestedDate].push({ type:"suggested",patient:p,duration:PROCEDURE_DURATIONS[p.procedure]||PROCEDURE_DURATIONS.default,label:`Schedule ${p.alias}`,sublabel:`Suggested · ${p.discipline}`,time:"",color:NYU.purpleMid,bg:"#f3e8ff" }); });
 
             const gradDateStr=graduationDateStr;
             const startOfMonth=(d)=>new Date(d.getFullYear(),d.getMonth(),1);
@@ -1259,12 +1222,12 @@ RESPONSE RULES:
                     <button onClick={()=>setCalDate(d=>calView==="week"?addDays(d,-7):new Date(d.getFullYear(),d.getMonth()-1,1))} style={{ background:NYU.gray100,border:"none",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center" }}>‹</button>
                     <span style={{ fontWeight:700,fontSize:15,color:NYU.gray900,minWidth:180,textAlign:"center" }}>{calView==="week"?`${fmtDisplay(weekDays[0])} — ${fmtDisplay(weekDays[4])}`:fmtMonth(calDate)}</span>
                     <button onClick={()=>setCalDate(d=>calView==="week"?addDays(d,7):new Date(d.getFullYear(),d.getMonth()+1,1))} style={{ background:NYU.gray100,border:"none",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center" }}>›</button>
-                    <button onClick={()=>setCalDate(new Date())} style={{ background:T.lavender,border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,color:T.purple,fontFamily:"'Inter', sans-serif" }}>Today</button>
+                    <button onClick={()=>setCalDate(new Date())} style={{ background:NYU.lavender,border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,color:NYU.purple,fontFamily:"'Inter', sans-serif" }}>Today</button>
                   </div>
                   <div style={{ display:"flex",gap:8,alignItems:"center" }}>
                     <div style={{ display:"flex",background:NYU.gray100,borderRadius:10,padding:3 }}>
                       {["week","month"].map(v=>(
-                        <button key={v} onClick={()=>setCalView(v)} style={{ background:calView===v?"white":"transparent",border:"none",borderRadius:8,padding:"6px 16px",cursor:"pointer",fontSize:12,fontWeight:600,color:calView===v?T.purple:NYU.gray400,fontFamily:"'Inter', sans-serif",boxShadow:calView===v?"0 1px 4px rgba(107,33,168,0.1)":"none",transition:"all 0.15s" }}>{v==="week"?"Week":"Month"}</button>
+                        <button key={v} onClick={()=>setCalView(v)} style={{ background:calView===v?"white":"transparent",border:"none",borderRadius:8,padding:"6px 16px",cursor:"pointer",fontSize:12,fontWeight:600,color:calView===v?NYU.purple:NYU.gray400,fontFamily:"'Inter', sans-serif",boxShadow:calView===v?"0 1px 4px rgba(107,33,168,0.1)":"none",transition:"all 0.15s" }}>{v==="week"?"Week":"Month"}</button>
                       ))}
                     </div>
                     {patients.some(p=>p.handoffPartner)&&(
@@ -1278,8 +1241,8 @@ RESPONSE RULES:
                 {/* Legend */}
                 <div style={{ display:"flex",gap:16,marginBottom:16,flexWrap:"wrap",alignItems:"center" }}>
                   {[
-                    { color:T.purple, label:"Confirmed" },
-                    { color:T.purpleMid, label:"Suggested" },
+                    { color:NYU.purple, label:"Confirmed" },
+                    { color:NYU.purpleMid, label:"Suggested" },
                     { color:ROTATION_COLOR, label:"External rotation" },
                     { color:NYU.red, label:"Time conflict" },
                   ].map(l=>(
@@ -1297,9 +1260,9 @@ RESPONSE RULES:
                     <div style={{ display:"grid",gridTemplateColumns:"64px repeat(7,1fr)",borderBottom:`1px solid ${NYU.gray100}` }}>
                       <div style={{ padding:"10px 0",borderRight:`1px solid ${NYU.gray100}` }}/>
                       {weekDays.map((d,i)=>(
-                        <div key={i} style={{ padding:"10px 12px",borderRight:i<6?`1px solid ${NYU.gray100}`:"none",background:isToday(d)?T.lavender:"white" }}>
+                        <div key={i} style={{ padding:"10px 12px",borderRight:i<6?`1px solid ${NYU.gray100}`:"none",background:isToday(d)?NYU.lavender:"white" }}>
                           <div style={{ fontSize:11,fontWeight:600,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em" }}>{d.toLocaleDateString("en-US",{ weekday:"short" })}</div>
-                          <div style={{ fontSize:20,fontWeight:700,color:isToday(d)?T.purple:NYU.gray900,fontFamily:"'Fraunces', serif",lineHeight:1.2 }}>{d.getDate()}</div>
+                          <div style={{ fontSize:20,fontWeight:700,color:isToday(d)?NYU.purple:NYU.gray900,fontFamily:"'Fraunces', serif",lineHeight:1.2 }}>{d.getDate()}</div>
                           {fmt(d)===gradDateStr&&<div style={{ fontSize:10,fontWeight:700,color:"#b45309",background:"#fef3c7",borderRadius:99,padding:"1px 8px",marginTop:2,display:"inline-block" }}>🎓 Graduation</div>}
                         </div>
                       ))}
@@ -1380,7 +1343,7 @@ RESPONSE RULES:
                             style={{ minHeight:100,padding:"6px 6px 8px",borderRight:colIndex<6?`1px solid ${NYU.gray100}`:"none",borderBottom:`1px solid ${NYU.gray100}`,background:todayFlag?"#fdfcff":weekend?NYU.gray50:"white",cursor:isEmpty?"pointer":"default" }}
                             onMouseEnter={e=>{ if(isEmpty) e.currentTarget.style.background="#f5f0ff"; }}
                             onMouseLeave={e=>{ if(isEmpty) e.currentTarget.style.background=todayFlag?"#fdfcff":weekend?NYU.gray50:"white"; }}>
-                            <div style={{ fontSize:13,fontWeight:700,color:todayFlag?T.purple:weekend?NYU.gray400:NYU.gray900,marginBottom:4,width:24,height:24,borderRadius:"50%",background:todayFlag?T.lavender:"transparent",display:"flex",alignItems:"center",justifyContent:"center" }}>{dayNum}</div>
+                            <div style={{ fontSize:13,fontWeight:700,color:todayFlag?NYU.purple:weekend?NYU.gray400:NYU.gray900,marginBottom:4,width:24,height:24,borderRadius:"50%",background:todayFlag?NYU.lavender:"transparent",display:"flex",alignItems:"center",justifyContent:"center" }}>{dayNum}</div>
                             {isGrad&&<div style={{ background:"#fef3c7",borderLeft:`3px solid #b45309`,borderRadius:4,padding:"2px 5px",marginBottom:3 }}><div style={{ fontSize:9,fontWeight:700,color:"#b45309" }}>🎓 Graduation</div></div>}
                             {getRotationsForDate(dateStr).map((r,ri)=>(
                               <div key={ri} onClick={()=>{ setRotationDraft({ id:r.id, site:r.site, startDate:r.startDate, endDate:r.endDate, time:r.time||"" }); setShowRotationModal(true); }}
@@ -1389,7 +1352,7 @@ RESPONSE RULES:
                               </div>
                             ))}
                             {dayAppts.slice(0,2).map((appt,ai)=><ApptChip key={ai} appt={appt} compact={true}/>)}
-                            {dayAppts.length>2&&<div style={{ fontSize:10,color:T.purple,fontWeight:600,marginTop:2 }}>+{dayAppts.length-2} more</div>}
+                            {dayAppts.length>2&&<div style={{ fontSize:10,color:NYU.purple,fontWeight:600,marginTop:2 }}>+{dayAppts.length-2} more</div>}
                           </div>
                         );
                       })}
@@ -1428,19 +1391,19 @@ RESPONSE RULES:
                                   <div style={{ flex:1 }}>
                                     <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                                       <span style={{ fontWeight:600,fontSize:13,color:NYU.gray900,cursor:"pointer" }} onClick={()=>setDetailPatient(appt.patient.id)}>{appt.label}</span>
-                                      {appt.time&&<span style={{ fontSize:11,fontWeight:700,color:isConflict?NYU.red:T.purple,background:isConflict?"#fee2e2":T.lavender,borderRadius:99,padding:"2px 8px" }}>{isConflict?"⚠ ":""}{appt.time}</span>}
+                                      {appt.time&&<span style={{ fontSize:11,fontWeight:700,color:isConflict?NYU.red:NYU.purple,background:isConflict?"#fee2e2":NYU.lavender,borderRadius:99,padding:"2px 8px" }}>{isConflict?"⚠ ":""}{appt.time}</span>}
                                     </div>
                                     <div style={{ fontSize:12,color:NYU.gray400,marginTop:2 }}>{appt.sublabel} · {appt.duration} min</div>
                                   </div>
                                   <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-                                    <span style={{ fontSize:10,fontWeight:600,color:appt.type==="suggested"?T.purpleMid:NYU.green,background:appt.type==="suggested"?"#f3e8ff":NYU.greenLight,borderRadius:99,padding:"2px 8px" }}>{appt.type==="suggested"?"Suggested":"Confirmed"}</span>
+                                    <span style={{ fontSize:10,fontWeight:600,color:appt.type==="suggested"?NYU.purpleMid:NYU.green,background:appt.type==="suggested"?"#f3e8ff":NYU.greenLight,borderRadius:99,padding:"2px 8px" }}>{appt.type==="suggested"?"Suggested":"Confirmed"}</span>
                                     {appt.type==="confirmed"&&(
                                       <button onClick={()=>{ setApptModalMode("edit"); setApptDraft({ patientId:appt.patient.id, date:appt.patient.nextAppt, time:appt.patient.nextApptTime||"" }); setShowApptModal(true); }}
                                         style={{ background:NYU.gray100,border:"none",borderRadius:8,padding:"4px 8px",cursor:"pointer",fontSize:11,color:NYU.gray600,fontFamily:"'Inter', sans-serif",fontWeight:600 }}>✎ Edit</button>
                                     )}
                                     {appt.type==="suggested"&&(
                                       <button onClick={()=>{ setApptModalMode("new"); setApptDraft({ patientId:appt.patient.id, date:appt.patient.nextAppt||date, time:"" }); setShowApptModal(true); }}
-                                        style={{ background:T.lavender,border:"none",borderRadius:8,padding:"4px 8px",cursor:"pointer",fontSize:11,color:T.purple,fontFamily:"'Inter', sans-serif",fontWeight:600 }}>+ Confirm</button>
+                                        style={{ background:NYU.lavender,border:"none",borderRadius:8,padding:"4px 8px",cursor:"pointer",fontSize:11,color:NYU.purple,fontFamily:"'Inter', sans-serif",fontWeight:600 }}>+ Confirm</button>
                                     )}
                                   </div>
                                 </div>
@@ -1523,20 +1486,20 @@ RESPONSE RULES:
               <div style={{ width:280,flexShrink:0 }}>
                 <div style={{ display:"flex",gap:8,marginBottom:16 }}>
                   <input style={{ ...inputStyle,fontSize:13,padding:"8px 12px",flex:1 }} placeholder="Search notes..." value={noteSearch} onChange={e=>setNoteSearch(e.target.value)}/>
-                  <button className="action-btn" onClick={async()=>{ const id=`n${Date.now()}`; const todayStr=new Date().toISOString().split("T")[0]; const n={ id,title:"Untitled",body:"",category:"General",pinned:false,updatedAt:todayStr }; await fetch("/api/notes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)}); setNotes(prev=>[n,...prev]); setActiveNote(id); setNoteDraft(n); }} style={{ background:T.purple,color:"white",padding:"8px 14px",fontSize:13,flexShrink:0 }}>+ New</button>
+                  <button className="action-btn" onClick={async()=>{ const id=`n${Date.now()}`; const todayStr=new Date().toISOString().split("T")[0]; const n={ id,title:"Untitled",body:"",category:"General",pinned:false,updatedAt:todayStr }; await fetch("/api/notes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)}); setNotes(prev=>[n,...prev]); setActiveNote(id); setNoteDraft(n); }} style={{ background:NYU.purple,color:"white",padding:"8px 14px",fontSize:13,flexShrink:0 }}>+ New</button>
                 </div>
                 {notes.filter(n=>n.pinned).length>0&&(
                   <div style={{ marginBottom:16 }}>
                     <div style={{ fontSize:10,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8 }}>Pinned</div>
                     {notes.filter(n=>n.pinned&&(!noteSearch||n.title.toLowerCase().includes(noteSearch.toLowerCase())||n.body.toLowerCase().includes(noteSearch.toLowerCase()))).map(note=>(
-                      <NoteCard key={note.id} note={note} active={activeNote===note.id} onClick={()=>{ setActiveNote(note.id); setNoteDraft({...note}); }} activeBg={T.lavender}/>
+                      <NoteCard key={note.id} note={note} active={activeNote===note.id} onClick={()=>{ setActiveNote(note.id); setNoteDraft({...note}); }}/>
                     ))}
                   </div>
                 )}
                 <div>
                   <div style={{ fontSize:10,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8 }}>All Notes</div>
                   {notes.filter(n=>!n.pinned&&(!noteSearch||n.title.toLowerCase().includes(noteSearch.toLowerCase())||n.body.toLowerCase().includes(noteSearch.toLowerCase()))).map(note=>(
-                    <NoteCard key={note.id} note={note} active={activeNote===note.id} onClick={()=>{ setActiveNote(note.id); setNoteDraft({...note}); }} activeBg={T.lavender}/>
+                    <NoteCard key={note.id} note={note} active={activeNote===note.id} onClick={()=>{ setActiveNote(note.id); setNoteDraft({...note}); }}/>
                   ))}
                 </div>
               </div>
@@ -1546,7 +1509,7 @@ RESPONSE RULES:
                     <div style={{ fontSize:40,marginBottom:16 }}>📓</div>
                     <div style={{ fontSize:16,fontWeight:600,color:NYU.gray900,marginBottom:8 }}>Your Notebook</div>
                     <div style={{ fontSize:13,color:NYU.gray400,marginBottom:24,lineHeight:1.6 }}>Jot down clinical thoughts, patient reminders, study notes.</div>
-                    <button className="action-btn" onClick={async()=>{ const id=`n${Date.now()}`; const todayStr=new Date().toISOString().split("T")[0]; const n={ id,title:"Untitled",body:"",category:"General",pinned:false,updatedAt:todayStr }; await fetch("/api/notes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)}); setNotes(prev=>[n,...prev]); setActiveNote(id); setNoteDraft(n); }} style={{ background:T.purple,color:"white" }}>Create your first note</button>
+                    <button className="action-btn" onClick={async()=>{ const id=`n${Date.now()}`; const todayStr=new Date().toISOString().split("T")[0]; const n={ id,title:"Untitled",body:"",category:"General",pinned:false,updatedAt:todayStr }; await fetch("/api/notes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)}); setNotes(prev=>[n,...prev]); setActiveNote(id); setNoteDraft(n); }} style={{ background:NYU.purple,color:"white" }}>Create your first note</button>
                   </div>
                 ):(
                   <div style={{ background:"white",borderRadius:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
@@ -1558,7 +1521,7 @@ RESPONSE RULES:
                       <button onClick={()=>setNoteDraft(p=>({...p,pinned:!p.pinned}))} style={{ background:noteDraft.pinned?NYU.amberLight:NYU.gray100,border:"none",borderRadius:99,padding:"4px 12px",cursor:"pointer",fontSize:12,color:noteDraft.pinned?NYU.amber:NYU.gray400,fontWeight:600,fontFamily:"'Inter', sans-serif" }}>{noteDraft.pinned?"📌 Pinned":"Pin"}</button>
                       <div style={{ flex:1 }}/>
                       <button onClick={async()=>{ await fetch(`/api/notes/${activeNote}`,{method:"DELETE"}); setNotes(prev=>prev.filter(n=>n.id!==activeNote)); setActiveNote(null); setNoteDraft(null); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter', sans-serif",padding:"4px 8px" }}>Delete</button>
-                      <button className="action-btn" onClick={async()=>{ const updated={...noteDraft,updatedAt:new Date().toISOString().split("T")[0]}; await fetch(`/api/notes/${activeNote}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(updated)}); setNotes(prev=>prev.map(n=>n.id===activeNote?updated:n)); setNoteDraft(updated); }} style={{ background:T.purple,color:"white",padding:"7px 18px",fontSize:13 }}>Save</button>
+                      <button className="action-btn" onClick={async()=>{ const updated={...noteDraft,updatedAt:new Date().toISOString().split("T")[0]}; await fetch(`/api/notes/${activeNote}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(updated)}); setNotes(prev=>prev.map(n=>n.id===activeNote?updated:n)); setNoteDraft(updated); }} style={{ background:NYU.purple,color:"white",padding:"7px 18px",fontSize:13 }}>Save</button>
                     </div>
                     <input style={{ width:"100%",fontSize:24,fontWeight:700,color:NYU.gray900,fontFamily:"'Fraunces', serif",border:"none",outline:"none",padding:"24px 28px 8px",letterSpacing:"-0.01em" }} placeholder="Untitled" value={noteDraft.title} onChange={e=>setNoteDraft(p=>({...p,title:e.target.value}))}/>
                     <div style={{ fontSize:11,color:NYU.gray400,paddingLeft:28,paddingBottom:12 }}>Last updated {noteDraft.updatedAt}</div>
@@ -1572,7 +1535,7 @@ RESPONSE RULES:
           {/* ── REQUIREMENTS TAB ── */}
           {tab==="requirements"&&(
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              <div style={{ background:T.lavender,borderRadius:16,padding:"20px 24px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",border:`1px solid ${NYU.gray200}` }}>
+              <div style={{ background:NYU.lavender,borderRadius:16,padding:"20px 24px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",border:`1px solid ${NYU.gray200}` }}>
                 <div>
                   <div style={{ color:NYU.gray900,fontWeight:700,fontSize:16,fontFamily:"'Fraunces', serif" }}>Graduation Requirement Progress</div>
                   <div style={{ color:NYU.gray600,fontSize:13,marginTop:2 }}>{editingGoals?"Drag to reorder · Toggle visibility · Edit targets":"Personalized to your clinical path"}</div>
@@ -1588,7 +1551,7 @@ RESPONSE RULES:
                     </div>
                   )}
                   {!editingGoals?(
-                    <button className="action-btn" onClick={()=>{ setEditGoalsDraft([...customGoals.map(g=>({...g}))]); setEditingGoals(true); }} style={{ background:"white",color:T.purple,fontSize:13 }}>✎ Edit Goals</button>
+                    <button className="action-btn" onClick={()=>{ setEditGoalsDraft([...customGoals.map(g=>({...g}))]); setEditingGoals(true); }} style={{ background:"white",color:NYU.purple,fontSize:13 }}>✎ Edit Goals</button>
                   ):(
                     <div style={{ display:"flex",gap:8 }}>
                       <button className="action-btn" onClick={()=>{ setEditingGoals(false); setEditGoalsDraft(null); }} style={{ background:"white",color:NYU.gray600,fontSize:13 }}>Cancel</button>
@@ -1602,20 +1565,20 @@ RESPONSE RULES:
                 <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                   {editGoalsDraft.map((goal,index)=>(
                     <div key={goal.discipline+index} draggable onDragStart={()=>setDragIndex(index)} onDragOver={e=>e.preventDefault()} onDrop={()=>{ if(dragIndex===null||dragIndex===index) return; const updated=[...editGoalsDraft]; const [moved]=updated.splice(dragIndex,1); updated.splice(index,0,moved); setEditGoalsDraft(updated); setDragIndex(null); }}
-                      className="card" style={{ padding:"14px 16px",display:"flex",alignItems:"center",gap:12,opacity:goal.visible?1:0.45,cursor:"grab",border:dragIndex===index?`2px dashed ${T.purple}`:"none" }}>
+                      className="card" style={{ padding:"14px 16px",display:"flex",alignItems:"center",gap:12,opacity:goal.visible?1:0.45,cursor:"grab",border:dragIndex===index?`2px dashed ${NYU.purple}`:"none" }}>
                       <span style={{ fontSize:18,color:NYU.gray400,cursor:"grab",userSelect:"none" }}>⠿</span>
-                      <input type="checkbox" checked={goal.visible} onChange={()=>{ const updated=[...editGoalsDraft]; updated[index]={...updated[index],visible:!updated[index].visible}; setEditGoalsDraft(updated); }} style={{ width:16,height:16,accentColor:T.purple,cursor:"pointer" }}/>
+                      <input type="checkbox" checked={goal.visible} onChange={()=>{ const updated=[...editGoalsDraft]; updated[index]={...updated[index],visible:!updated[index].visible}; setEditGoalsDraft(updated); }} style={{ width:16,height:16,accentColor:NYU.purple,cursor:"pointer" }}/>
                       <span style={{ flex:1,fontSize:14,fontWeight:500,color:NYU.gray900 }}>{goal.discipline}</span>
                       <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                         <span style={{ fontSize:12,color:NYU.gray400 }}>Target:</span>
-                        <input type="number" min={1} max={99} value={goal.required} onChange={e=>{ const updated=[...editGoalsDraft]; updated[index]={...updated[index],required:parseInt(e.target.value)||1}; setEditGoalsDraft(updated); }} style={{ width:56,padding:"5px 8px",borderRadius:8,border:`1.5px solid ${NYU.gray200}`,fontSize:14,fontWeight:600,color:T.purple,textAlign:"center",fontFamily:"'Inter', sans-serif",outline:"none" }}/>
+                        <input type="number" min={1} max={99} value={goal.required} onChange={e=>{ const updated=[...editGoalsDraft]; updated[index]={...updated[index],required:parseInt(e.target.value)||1}; setEditGoalsDraft(updated); }} style={{ width:56,padding:"5px 8px",borderRadius:8,border:`1.5px solid ${NYU.gray200}`,fontSize:14,fontWeight:600,color:NYU.purple,textAlign:"center",fontFamily:"'Inter', sans-serif",outline:"none" }}/>
                       </div>
                     </div>
                   ))}
                   <div className="card" style={{ padding:"14px 16px",display:"flex",alignItems:"center",gap:10,border:`1.5px dashed ${NYU.gray200}`,boxShadow:"none" }}>
                     <span style={{ fontSize:18,color:NYU.gray200 }}>+</span>
                     <input style={{ flex:1,padding:"6px 10px",borderRadius:8,border:`1.5px solid ${NYU.gray200}`,fontSize:14,fontFamily:"'Inter', sans-serif",outline:"none" }} placeholder="Add custom discipline..." value={newDisciplineName} onChange={e=>setNewDisciplineName(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"&&newDisciplineName.trim()){ setEditGoalsDraft([...editGoalsDraft,{ discipline:newDisciplineName.trim(),required:5,visible:true,order:editGoalsDraft.length }]); setNewDisciplineName(""); } }}/>
-                    <button className="action-btn" onClick={()=>{ if(!newDisciplineName.trim()) return; setEditGoalsDraft([...editGoalsDraft,{ discipline:newDisciplineName.trim(),required:5,visible:true,order:editGoalsDraft.length }]); setNewDisciplineName(""); }} style={{ background:T.purple,color:"white",padding:"7px 14px" }}>Add</button>
+                    <button className="action-btn" onClick={()=>{ if(!newDisciplineName.trim()) return; setEditGoalsDraft([...editGoalsDraft,{ discipline:newDisciplineName.trim(),required:5,visible:true,order:editGoalsDraft.length }]); setNewDisciplineName(""); }} style={{ background:NYU.purple,color:"white",padding:"7px 14px" }}>Add</button>
                   </div>
                 </div>
               )}
@@ -1638,7 +1601,7 @@ RESPONSE RULES:
                     <div className="progress-bar"><div className="progress-fill" style={{ width:`${pct}%`,background:color }}/></div>
                     {qualifyingPatients.length>0&&(
                       <div style={{ marginTop:10,fontSize:12,color:NYU.gray600 }}>
-                        <span style={{ fontWeight:600,color:T.purple }}>Active: </span>
+                        <span style={{ fontWeight:600,color:NYU.purple }}>Active: </span>
                         {qualifyingPatients.map(p=>p.alias).join(", ")}
                       </div>
                     )}
@@ -1656,21 +1619,21 @@ RESPONSE RULES:
           <div style={{ background:"white",borderBottom:`1px solid ${NYU.gray100}`,padding:"0 20px",height:56,display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:10 }}>
             <button onClick={()=>setShowRosterPanel(false)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:22,color:NYU.gray600 }}>←</button>
             <span style={{ fontWeight:600,fontSize:16,color:NYU.gray900,flex:1 }}>👤 Patient Roster</span>
-            <button className="action-btn" onClick={()=>{ setShowAddModal(true); setShowRosterPanel(false); }} style={{ background:T.purple,color:"white",fontSize:12,padding:"7px 16px" }}>+ Add Patient</button>
+            <button className="action-btn" onClick={()=>{ setShowAddModal(true); setShowRosterPanel(false); }} style={{ background:NYU.purple,color:"white",fontSize:12,padding:"7px 16px" }}>+ Add Patient</button>
           </div>
           <div style={{ maxWidth:1100,margin:"0 auto",padding:"28px 32px 80px" }}>
             <div className="stats-grid" style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:14,marginBottom:24 }}>
               {stats.map(s=>(<div key={s.label} style={{ background:"white",borderRadius:14,padding:"18px 20px",border:`1px solid ${NYU.gray100}` }}><div style={{ fontSize:30,fontWeight:700,color:NYU.gray900,fontFamily:"'Fraunces', serif",lineHeight:1 }}>{s.value}</div><div style={{ fontSize:12,color:NYU.gray400,marginTop:6,fontWeight:500 }}>{s.label}</div></div>))}
             </div>
             <div style={{ display:"flex",gap:8,marginBottom:20,flexWrap:"wrap" }}>
-              {["All","Active","Urgent","F/U Needed","Complete"].map(f=>(<button key={f} className="filter-btn" onClick={()=>setFilter(f)} style={{ background:filter===f?T.purple:NYU.gray100,color:filter===f?"white":NYU.gray600,border:"none",fontSize:12,padding:"6px 14px" }}>{f}</button>))}
+              {["All","Active","Urgent","F/U Needed","Complete"].map(f=>(<button key={f} className="filter-btn" onClick={()=>setFilter(f)} style={{ background:filter===f?NYU.purple:NYU.gray100,color:filter===f?"white":NYU.gray600,border:"none",fontSize:12,padding:"6px 14px" }}>{f}</button>))}
             </div>
             <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
               {filtered.map(patient=>{
                 const status=calculateStatus(patient);
                 const meta=STATUS_META[status]||{ color:NYU.gray400,bg:NYU.gray100 };
                 const urgency=calculateUrgency(patient);
-                const avatarMeta=DISCIPLINE_AVATAR[patient.discipline]||{ bg:T.lavender,color:T.purple,initial:"??" };
+                const avatarMeta=DISCIPLINE_AVATAR[patient.discipline]||{ bg:NYU.lavender,color:NYU.purple,initial:"??" };
                 const preAuthNudge=getPreAuthNudge(patient);
                 const labNudge=getLabNudge(patient);
                 return (
@@ -1712,7 +1675,7 @@ RESPONSE RULES:
             <span style={{ fontWeight:600,fontSize:16,color:NYU.gray900,flex:1 }}>🎓 Graduation Goals</span>
           </div>
           <div style={{ maxWidth:1100,margin:"0 auto",padding:"28px 32px 80px" }}>
-            <div style={{ background:onTrack?T.lavender:NYU.redLight,borderRadius:16,padding:"20px 24px",marginBottom:24,border:`1px solid ${onTrack?NYU.gray200:"#fecaca"}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:20,flexWrap:"wrap" }}>
+            <div style={{ background:onTrack?NYU.lavender:NYU.redLight,borderRadius:16,padding:"20px 24px",marginBottom:24,border:`1px solid ${onTrack?NYU.gray200:"#fecaca"}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:20,flexWrap:"wrap" }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:700,fontSize:15,color:NYU.gray900,fontFamily:"'Fraunces', serif",marginBottom:6 }}>{onTrack?"🎓 On track for graduation":"📋 Caseload needs attention"}</div>
                 <div style={{ fontSize:13,color:NYU.gray600 }}>{totalCompleted} of {totalRequired} procedures complete · {daysToGraduation} days remaining</div>
@@ -1740,7 +1703,7 @@ RESPONSE RULES:
                       </div>
                     </div>
                     <div className="progress-bar"><div className="progress-fill" style={{ width:`${pct}%`,background:color }}/></div>
-                    {activePts.length>0&&<div style={{ marginTop:10,fontSize:12,color:NYU.gray600 }}><span style={{ fontWeight:600,color:T.purple }}>Active: </span>{activePts.map(p=>p.alias).join(", ")}</div>}
+                    {activePts.length>0&&<div style={{ marginTop:10,fontSize:12,color:NYU.gray600 }}><span style={{ fontWeight:600,color:NYU.purple }}>Active: </span>{activePts.map(p=>p.alias).join(", ")}</div>}
                   </div>
                 );
               })}
@@ -1768,7 +1731,7 @@ RESPONSE RULES:
               <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
                 {urgentPatients.map(patient=>{
                   const urgency=calculateUrgency(patient);
-                  const avatarMeta=DISCIPLINE_AVATAR[patient.discipline]||{ bg:T.lavender,color:T.purple,initial:"??" };
+                  const avatarMeta=DISCIPLINE_AVATAR[patient.discipline]||{ bg:NYU.lavender,color:NYU.purple,initial:"??" };
                   return (
                     <div key={patient.id} style={{ background:"white",borderRadius:16,border:`1px solid #fed7aa`,overflow:"hidden" }}>
                       <div style={{ padding:"16px 20px",display:"flex",alignItems:"center",gap:14 }}>
@@ -1779,7 +1742,7 @@ RESPONSE RULES:
                           <div style={{ fontWeight:700,fontSize:15,color:NYU.gray900 }}>{patient.alias}</div>
                           <div style={{ fontSize:12,color:NYU.gray400,marginTop:2 }}>{patient.procedure} · {patient.discipline}</div>
                         </div>
-                        <button className="action-btn" onClick={()=>{ setDetailPatient(patient.id); setShowUrgentPanel(false); }} style={{ background:T.purple,color:"white",fontSize:12,padding:"7px 16px" }}>View →</button>
+                        <button className="action-btn" onClick={()=>{ setDetailPatient(patient.id); setShowUrgentPanel(false); }} style={{ background:NYU.purple,color:"white",fontSize:12,padding:"7px 16px" }}>View →</button>
                       </div>
                       <div style={{ background:NYU.orangeLight,padding:"10px 20px",borderTop:`1px solid #fed7aa`,display:"flex",flexWrap:"wrap",gap:8 }}>
                         {urgency.map((reason,i)=>(
@@ -1813,7 +1776,7 @@ RESPONSE RULES:
               </div>
               <div style={{ display:"flex",gap:10,marginTop:4 }}>
                 <button className="action-btn" onClick={()=>setShowAddModal(false)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>Cancel</button>
-                <button className="action-btn" onClick={addPatient} style={{ flex:1,background:T.purple,color:"white" }}>Add Patient</button>
+                <button className="action-btn" onClick={addPatient} style={{ flex:1,background:NYU.purple,color:"white" }}>Add Patient</button>
               </div>
             </div>
           </div>
@@ -1843,7 +1806,7 @@ RESPONSE RULES:
                   {isListeningNlp?"⏹":"🎙"}
                 </button>
                 </div>
-                <button className="action-btn" onClick={parseWithAI} disabled={nlpLoading||!nlpInput.trim()} style={{ background:nlpLoading?T.purpleMid:T.accent,color:"white",width:"100%",marginTop:8,fontSize:13 }}>
+                <button className="action-btn" onClick={parseWithAI} disabled={nlpLoading||!nlpInput.trim()} style={{ background:nlpLoading?NYU.purpleMid:NYU.accent,color:"white",width:"100%",marginTop:8,fontSize:13 }}>
                   {nlpLoading?<><span className="spinner"/>Parsing...</>:"✦ Auto-fill from description"}
                 </button>
                 {nlpParsed&&!nlpLoading&&(
@@ -1874,7 +1837,7 @@ RESPONSE RULES:
               </div>
               <div style={{ display:"flex",gap:10 }}>
                 <button className="action-btn" onClick={()=>setShowLogModal(null)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>Cancel</button>
-                <button className="action-btn" onClick={()=>logVisit(showLogModal)} disabled={!newVisit.date||!newVisit.procedure} style={{ flex:1,background:T.purple,color:"white" }}>Save Visit</button>
+                <button className="action-btn" onClick={()=>logVisit(showLogModal)} disabled={!newVisit.date||!newVisit.procedure} style={{ flex:1,background:NYU.purple,color:"white" }}>Save Visit</button>
               </div>
             </div>
           </div>
@@ -1888,7 +1851,7 @@ RESPONSE RULES:
         const status=calculateStatus(patient);
         const meta=STATUS_META[status]||{ color:NYU.gray400,bg:NYU.gray100 };
         const urgency=calculateUrgency(patient);
-        const avatarMeta=DISCIPLINE_AVATAR[patient.discipline]||{ bg:T.lavender,color:T.purple,initial:"??" };
+        const avatarMeta=DISCIPLINE_AVATAR[patient.discipline]||{ bg:NYU.lavender,color:NYU.purple,initial:"??" };
         const preAuthNudge=getPreAuthNudge(patient);
         const labNudge=getLabNudge(patient);
 
@@ -1897,7 +1860,7 @@ RESPONSE RULES:
             <div style={{ background:"white",borderBottom:`1px solid ${NYU.gray100}`,padding:"0 20px",height:56,display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:10 }}>
               <button onClick={()=>{ setDetailPatient(null); setSelectedVisit(null); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:22,color:NYU.gray600 }}>←</button>
               <span style={{ fontWeight:600,fontSize:16,color:NYU.gray900,flex:1 }}>Patient Detail</span>
-              <button className="action-btn" onClick={()=>{ setShowLogModal(patient.id); setNewVisit({ date:"",procedure:"",notes:"",nextAppt:"",cdtCode:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); }} style={{ background:T.purple,color:"white",fontSize:12,padding:"7px 16px" }}>+ Log Visit</button>
+              <button className="action-btn" onClick={()=>{ setShowLogModal(patient.id); setNewVisit({ date:"",procedure:"",notes:"",nextAppt:"",cdtCode:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); }} style={{ background:NYU.purple,color:"white",fontSize:12,padding:"7px 16px" }}>+ Log Visit</button>
             </div>
 
             <div style={{ maxWidth:1100,margin:"0 auto",padding:"28px 32px 80px" }}>
@@ -1928,8 +1891,8 @@ RESPONSE RULES:
               )}
 
               {/* Chart number — shown in detail for student reference */}
-              <div style={{ background:T.lavender,borderRadius:14,padding:"12px 18px",marginBottom:16 }}>
-                <div style={{ fontSize:11,fontWeight:600,color:T.purple,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2 }}>Axium Chart Number <span style={{ fontSize:10,fontWeight:400,color:NYU.gray400 }}>(student reference only — not displayed externally)</span></div>
+              <div style={{ background:NYU.lavender,borderRadius:14,padding:"12px 18px",marginBottom:16 }}>
+                <div style={{ fontSize:11,fontWeight:600,color:NYU.purple,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2 }}>Axium Chart Number <span style={{ fontSize:10,fontWeight:400,color:NYU.gray400 }}>(student reference only — not displayed externally)</span></div>
                 <div style={{ fontSize:16,fontWeight:700,color:NYU.gray900,letterSpacing:"0.05em" }}>{patient.chartNumber}</div>
               </div>
 
@@ -1954,11 +1917,11 @@ RESPONSE RULES:
                     </div>
                     <div>
                       <div style={{ fontSize:11,color:NYU.gray400,fontWeight:500,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em" }}>Next Appointment</div>
-                      <input type="date" value={patient.nextAppt||""} onChange={e=>updateField(patient.id,"nextAppt",e.target.value||null)} style={{ ...inputStyle,fontSize:13,padding:"8px 10px",color:patient.nextAppt?T.purple:NYU.gray400 }}/>
+                      <input type="date" value={patient.nextAppt||""} onChange={e=>updateField(patient.id,"nextAppt",e.target.value||null)} style={{ ...inputStyle,fontSize:13,padding:"8px 10px",color:patient.nextAppt?NYU.purple:NYU.gray400 }}/>
                       {/* Suggested next appt from prediction */}
                       {prediction&&prediction.daysOut>0&&!patient.nextAppt&&(
                         <button onClick={()=>updateField(patient.id,"nextAppt",prediction.date)}
-                          style={{ marginTop:6,fontSize:11,fontWeight:600,color:T.purple,background:T.lavender,border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"4px 12px",cursor:"pointer",fontFamily:"'Inter', sans-serif",display:"flex",alignItems:"center",gap:5,width:"100%" }}>
+                          style={{ marginTop:6,fontSize:11,fontWeight:600,color:NYU.purple,background:NYU.lavender,border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"4px 12px",cursor:"pointer",fontFamily:"'Inter', sans-serif",display:"flex",alignItems:"center",gap:5,width:"100%" }}>
                           🔮 Use suggested: {prediction.date}
                         </button>
                       )}
@@ -2047,10 +2010,10 @@ RESPONSE RULES:
                     <div style={{ position:"absolute",left:17,top:8,bottom:8,width:2,background:NYU.gray100,borderRadius:99 }}/>
                     {[...patient.visitLog].sort((a,b)=>new Date(b.date)-new Date(a.date)).map((v,i)=>(
                       <div key={i} onClick={()=>setSelectedVisit(selectedVisit===i?null:i)} style={{ display:"flex",gap:14,marginBottom:12,cursor:"pointer",position:"relative" }}>
-                        <div style={{ width:36,height:36,borderRadius:"50%",background:i===0?T.purple:"white",border:`2px solid ${i===0?T.purple:NYU.gray200}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,zIndex:1 }}>
+                        <div style={{ width:36,height:36,borderRadius:"50%",background:i===0?NYU.purple:"white",border:`2px solid ${i===0?NYU.purple:NYU.gray200}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,zIndex:1 }}>
                           <span style={{ fontSize:11,color:i===0?"white":NYU.gray400,fontWeight:600 }}>{patient.visitLog.length-i}</span>
                         </div>
-                        <div style={{ flex:1,background:selectedVisit===i?T.lavender:NYU.gray50,borderRadius:12,padding:"10px 14px",border:`1px solid ${selectedVisit===i?NYU.gray200:"transparent"}`,transition:"all 0.18s" }}>
+                        <div style={{ flex:1,background:selectedVisit===i?NYU.lavender:NYU.gray50,borderRadius:12,padding:"10px 14px",border:`1px solid ${selectedVisit===i?NYU.gray200:"transparent"}`,transition:"all 0.18s" }}>
                           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
                             <div>
                               <div style={{ fontSize:13,fontWeight:600,color:NYU.gray900 }}>{v.procedure}</div>
@@ -2063,10 +2026,10 @@ RESPONSE RULES:
                               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:v.notes?10:0 }}>
                                 <div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>Date</div><div style={{ fontSize:13,fontWeight:500,color:NYU.gray900 }}>{v.date}</div></div>
                                 <div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>Procedure</div><div style={{ fontSize:13,fontWeight:500,color:NYU.gray900 }}>{v.procedure}</div></div>
-                                {v.cdtCode&&<div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>CDT Code</div><div style={{ fontSize:13,fontWeight:500,color:T.purple }}>{v.cdtCode}</div></div>}
+                                {v.cdtCode&&<div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>CDT Code</div><div style={{ fontSize:13,fontWeight:500,color:NYU.purple }}>{v.cdtCode}</div></div>}
                               </div>
                               {v.notes&&<div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>Clinical Notes</div><div style={{ fontSize:13,color:NYU.gray600,lineHeight:1.5,background:"white",borderRadius:8,padding:"8px 10px" }}>{v.notes}</div></div>}
-                              <div style={{ marginTop:8,fontSize:11,color:T.purple,fontWeight:500 }}>Visit #{patient.visitLog.length-i} of {patient.visitLog.length}</div>
+                              <div style={{ marginTop:8,fontSize:11,color:NYU.purple,fontWeight:500 }}>Visit #{patient.visitLog.length-i} of {patient.visitLog.length}</div>
                             </div>
                           )}
                         </div>
@@ -2092,7 +2055,7 @@ RESPONSE RULES:
                   </select>
                 </div>
                 {patient.patientLanguage&&patient.patientLanguage!=="English"&&(
-                  <div style={{ background:T.lavender,borderRadius:10,padding:"10px 14px",fontSize:12,color:NYU.gray600,lineHeight:1.5 }}>
+                  <div style={{ background:NYU.lavender,borderRadius:10,padding:"10px 14px",fontSize:12,color:NYU.gray700,lineHeight:1.5 }}>
                     💬 ClinIQ assistant can translate patient instructions and post-op care into <strong>{patient.patientLanguage}</strong>. Ask it: "Explain the post-op care for {patient.alias} in {patient.patientLanguage}."
                   </div>
                 )}
@@ -2132,7 +2095,7 @@ RESPONSE RULES:
         {chatOpen&&(
           <div style={{ position:"absolute",bottom:72,right:0,width:380,height:540,background:"white",borderRadius:20,boxShadow:"0 8px 40px rgba(87,6,140,0.22)",display:"flex",flexDirection:"column",overflow:"hidden",animation:"slideUp 0.2s ease" }}>
             {/* Header */}
-            <div style={{ background:`linear-gradient(135deg, ${T.purpleDeep}, ${T.accent})`,padding:"16px 18px",display:"flex",alignItems:"center",gap:10 }}>
+            <div style={{ background:`linear-gradient(135deg, ${NYU.purpleDeep}, ${NYU.accent})`,padding:"16px 18px",display:"flex",alignItems:"center",gap:10 }}>
               <div style={{ width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
                 <span style={{ color:"white",fontSize:16,fontWeight:700 }}>✦</span>
               </div>
@@ -2149,7 +2112,7 @@ RESPONSE RULES:
                 <div style={{ fontSize:10,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8 }}>Try asking</div>
                 <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
                   {["Any pre-auths ready to check?","Which patients need follow-up?","Am I on track to graduate?","Explain SRP aftercare in Spanish"].map(q=>(
-                    <button key={q} onClick={()=>setChatInput(q)} style={{ background:"white",border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"4px 10px",fontSize:11,color:T.purple,cursor:"pointer",fontFamily:"'Inter', sans-serif",fontWeight:500 }}>{q}</button>
+                    <button key={q} onClick={()=>setChatInput(q)} style={{ background:"white",border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"4px 10px",fontSize:11,color:NYU.purple,cursor:"pointer",fontFamily:"'Inter', sans-serif",fontWeight:500 }}>{q}</button>
                   ))}
                 </div>
               </div>
@@ -2160,12 +2123,12 @@ RESPONSE RULES:
               {chatMessages.map((msg,i)=>(
                 <div key={i} style={{ display:"flex",justifyContent:msg.role==="user"?"flex-end":"flex-start",alignItems:"flex-end",gap:8 }}>
                   {msg.role==="assistant"&&(
-                    <div style={{ width:24,height:24,borderRadius:6,background:T.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                    <div style={{ width:24,height:24,borderRadius:6,background:NYU.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
                       <span style={{ color:"white",fontSize:11,fontWeight:700 }}>✦</span>
                     </div>
                   )}
                   <div style={{ maxWidth:"82%", display:"flex", flexDirection:"column", gap:6, alignItems:msg.role==="user"?"flex-end":"flex-start" }}>
-                    <div style={{ padding:"10px 14px",borderRadius:msg.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:msg.role==="user"?T.purple:NYU.gray50,color:msg.role==="user"?"white":NYU.gray900,fontSize:13,lineHeight:1.5,border:msg.role==="assistant"?`1px solid ${NYU.gray100}`:"none" }}>
+                    <div style={{ padding:"10px 14px",borderRadius:msg.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:msg.role==="user"?NYU.purple:NYU.gray50,color:msg.role==="user"?"white":NYU.gray900,fontSize:13,lineHeight:1.5,border:msg.role==="assistant"?`1px solid ${NYU.gray100}`:"none" }}>
                       {msg.content}
                     </div>
                     {/* Smart action button */}
@@ -2176,7 +2139,7 @@ RESPONSE RULES:
                         if(!p) return null;
                         return (
                           <button onClick={()=>{ setDetailPatient(p.id); if(type==="logvisit"){ setShowLogModal(p.id); setNewVisit({ date:"",procedure:"",notes:"",nextAppt:"",cdtCode:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); } }}
-                            style={{ fontSize:11,fontWeight:600,color:T.purple,background:T.lavender,border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"5px 12px",cursor:"pointer",fontFamily:"'Inter', sans-serif",display:"flex",alignItems:"center",gap:5 }}>
+                            style={{ fontSize:11,fontWeight:600,color:NYU.purple,background:NYU.lavender,border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"5px 12px",cursor:"pointer",fontFamily:"'Inter', sans-serif",display:"flex",alignItems:"center",gap:5 }}>
                             {type==="logvisit"?"📝 Log visit for ":"👤 View "}{alias} →
                           </button>
                         );
@@ -2184,7 +2147,7 @@ RESPONSE RULES:
                       if(type==="calendar"){
                         return (
                           <button onClick={()=>{ setTab("calendar"); setChatOpen(false); }}
-                            style={{ fontSize:11,fontWeight:600,color:T.purple,background:T.lavender,border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"5px 12px",cursor:"pointer",fontFamily:"'Inter', sans-serif",display:"flex",alignItems:"center",gap:5 }}>
+                            style={{ fontSize:11,fontWeight:600,color:NYU.purple,background:NYU.lavender,border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"5px 12px",cursor:"pointer",fontFamily:"'Inter', sans-serif",display:"flex",alignItems:"center",gap:5 }}>
                             📅 Open Calendar →
                           </button>
                         );
@@ -2196,9 +2159,9 @@ RESPONSE RULES:
               ))}
               {chatLoading&&(
                 <div style={{ display:"flex",alignItems:"flex-end",gap:8 }}>
-                  <div style={{ width:24,height:24,borderRadius:6,background:T.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><span style={{ color:"white",fontSize:11 }}>✦</span></div>
+                  <div style={{ width:24,height:24,borderRadius:6,background:NYU.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><span style={{ color:"white",fontSize:11 }}>✦</span></div>
                   <div style={{ background:NYU.gray50,border:`1px solid ${NYU.gray100}`,borderRadius:"16px 16px 16px 4px",padding:"10px 14px",display:"flex",gap:4,alignItems:"center" }}>
-                    {[0,1,2].map(i=><div key={i} style={{ width:6,height:6,borderRadius:"50%",background:T.purple,opacity:0.5,animation:`bounce ${0.5+i*0.15}s ease-in-out infinite alternate` }}/>)}
+                    {[0,1,2].map(i=><div key={i} style={{ width:6,height:6,borderRadius:"50%",background:NYU.purple,opacity:0.5,animation:`bounce ${0.5+i*0.15}s ease-in-out infinite alternate` }}/>)}
                   </div>
                 </div>
               )}
@@ -2227,11 +2190,11 @@ RESPONSE RULES:
                 {isListening?"⏹":"🎙"}
               </button>
               <button onClick={sendChat} disabled={chatLoading||!chatInput.trim()}
-                style={{ background:T.purple,border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",color:"white",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:(!chatInput.trim()||chatLoading)?0.5:1 }}>↑</button>
+                style={{ background:NYU.purple,border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",color:"white",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:(!chatInput.trim()||chatLoading)?0.5:1 }}>↑</button>
             </div>
           </div>
         )}
-        <button onClick={()=>setChatOpen(!chatOpen)} style={{ width:56,height:56,borderRadius:"50%",background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`,border:"none",cursor:"pointer",boxShadow:"0 4px 20px rgba(137,0,225,0.4)",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",transform:chatOpen?"rotate(45deg) scale(0.95)":"scale(1)" }}>
+        <button onClick={()=>setChatOpen(!chatOpen)} style={{ width:56,height:56,borderRadius:"50%",background:`linear-gradient(135deg, ${NYU.purple}, ${NYU.accent})`,border:"none",cursor:"pointer",boxShadow:"0 4px 20px rgba(137,0,225,0.4)",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",transform:chatOpen?"rotate(45deg) scale(0.95)":"scale(1)" }}>
           <span style={{ color:"white",fontSize:chatOpen?22:20,fontWeight:700,lineHeight:1 }}>{chatOpen?"×":"✦"}</span>
         </button>
       </div>
@@ -2356,7 +2319,7 @@ RESPONSE RULES:
                     }
                     setShowApptModal(false);
                   }}
-                  style={{ flex:1,background:T.purple,color:"white" }}>
+                  style={{ flex:1,background:NYU.purple,color:"white" }}>
                   {apptModalMode==="edit"?"Save Changes":"Add Appointment"}
                 </button>
               </div>
@@ -2386,7 +2349,7 @@ RESPONSE RULES:
                   <div style={{ fontSize:11,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8 }}>Viewing As</div>
                   <div style={{ display:"flex",background:NYU.gray100,borderRadius:10,padding:3,gap:2 }}>
                     {[{ key:"me",label:"👤 My View" },{ key:"partner",label:`🤝 @${partnerName}` }].map(v=>(
-                      <button key={v.key} onClick={()=>setPairedViewingAs(v.key)} style={{ flex:1,padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'Inter', sans-serif",background:pairedViewingAs===v.key?"white":"transparent",color:pairedViewingAs===v.key?T.purple:NYU.gray400,boxShadow:pairedViewingAs===v.key?"0 1px 4px rgba(107,33,168,0.1)":"none",transition:"all 0.15s" }}>{v.label}</button>
+                      <button key={v.key} onClick={()=>setPairedViewingAs(v.key)} style={{ flex:1,padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'Inter', sans-serif",background:pairedViewingAs===v.key?"white":"transparent",color:pairedViewingAs===v.key?NYU.purple:NYU.gray400,boxShadow:pairedViewingAs===v.key?"0 1px 4px rgba(107,33,168,0.1)":"none",transition:"all 0.15s" }}>{v.label}</button>
                     ))}
                   </div>
                   {pairedViewingAs==="partner"&&(
@@ -2413,7 +2376,7 @@ RESPONSE RULES:
                   <div>
                     <div style={{ fontSize:13,fontWeight:600,color:NYU.gray900,marginBottom:16 }}>{sharedPatients.length} patient{sharedPatients.length!==1?"s":""} visible to your paired provider</div>
                     {sharedPatients.map(p=>{
-                      const av=DISCIPLINE_AVATAR[p.discipline]||{ bg:T.lavender,color:T.purple,initial:"??" };
+                      const av=DISCIPLINE_AVATAR[p.discipline]||{ bg:NYU.lavender,color:NYU.purple,initial:"??" };
                       const fields=[
                         { key:"shareCalendar",label:"📅 Next Appointment",value:p.nextAppt||"Not scheduled" },
                         { key:"shareVisitHistory",label:"📋 Visit History",value:`${p.visitLog?.length||0} visits logged` },
@@ -2434,7 +2397,7 @@ RESPONSE RULES:
                               </div>
                             ); })}
                           </div>
-                          {p.handoffNotes&&<div style={{ padding:"10px 12px",background:T.lavender,borderRadius:10,fontSize:12,color:NYU.gray600,fontStyle:"italic",marginTop:8 }}>📌 "{p.handoffNotes}"</div>}
+                          {p.handoffNotes&&<div style={{ padding:"10px 12px",background:NYU.lavender,borderRadius:10,fontSize:12,color:NYU.gray700,fontStyle:"italic",marginTop:8 }}>📌 "{p.handoffNotes}"</div>}
                         </div>
                       );
                     })}
@@ -2445,7 +2408,7 @@ RESPONSE RULES:
               return (
                 <div>
                   <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:24 }}>
-                    {[{ label:"Shared",value:sharedPatients.length,color:NYU.green },{ label:"Partners",value:partners.length,color:T.purple },{ label:"Needs Partner",value:needsPartner.length,color:NYU.orange }].map(s=>(
+                    {[{ label:"Shared",value:sharedPatients.length,color:NYU.green },{ label:"Partners",value:partners.length,color:NYU.purple },{ label:"Needs Partner",value:needsPartner.length,color:NYU.orange }].map(s=>(
                       <div key={s.label} style={{ background:NYU.gray50,borderRadius:12,padding:"14px 16px",textAlign:"center",border:`1px solid ${NYU.gray100}` }}>
                         <div style={{ fontSize:28,fontWeight:700,color:s.color,fontFamily:"'Fraunces', serif" }}>{s.value}</div>
                         <div style={{ fontSize:11,color:NYU.gray400,marginTop:4 }}>{s.label}</div>
@@ -2455,27 +2418,27 @@ RESPONSE RULES:
                   {partners.length>0?partners.map(partner=>(
                     <div key={partner.name} style={{ marginBottom:24 }}>
                       <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:12 }}>
-                        <div style={{ width:38,height:38,borderRadius:10,background:T.purple,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><span style={{ fontSize:15,color:"white",fontWeight:700 }}>{partner.name.charAt(0)}</span></div>
-                        <div><div style={{ fontWeight:700,fontSize:15,color:NYU.gray900 }}>{partner.name}</div><div style={{ fontSize:12,color:T.purple }}>{partner.year} · {partner.patients.length} shared</div></div>
+                        <div style={{ width:38,height:38,borderRadius:10,background:NYU.purple,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><span style={{ fontSize:15,color:"white",fontWeight:700 }}>{partner.name.charAt(0)}</span></div>
+                        <div><div style={{ fontWeight:700,fontSize:15,color:NYU.gray900 }}>{partner.name}</div><div style={{ fontSize:12,color:NYU.purple }}>{partner.year} · {partner.patients.length} shared</div></div>
                       </div>
                       {partner.patients.map(p=>{
-                        const av=DISCIPLINE_AVATAR[p.discipline]||{ bg:T.lavender,color:T.purple,initial:"??" };
+                        const av=DISCIPLINE_AVATAR[p.discipline]||{ bg:NYU.lavender,color:NYU.purple,initial:"??" };
                         return (
                           <div key={p.id} style={{ background:"white",border:`1px solid ${NYU.gray100}`,borderRadius:14,padding:"14px 16px",marginBottom:8 }}>
                             <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}>
                               <div style={{ width:36,height:36,borderRadius:10,background:av.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><span style={{ fontSize:11,fontWeight:700,color:av.color }}>{av.initial}</span></div>
                               <div style={{ flex:1 }}><div style={{ fontWeight:700,fontSize:14,color:NYU.gray900 }}>{p.alias}</div><div style={{ fontSize:12,color:NYU.gray400 }}>{p.discipline}</div></div>
-                              <button className="action-btn" onClick={()=>{ setDetailPatient(p.id); setShowPairedPanel(false); setTab("roster"); }} style={{ background:T.lavender,color:T.purple,fontSize:11 }}>View →</button>
+                              <button className="action-btn" onClick={()=>{ setDetailPatient(p.id); setShowPairedPanel(false); setTab("roster"); }} style={{ background:NYU.lavender,color:NYU.purple,fontSize:11 }}>View →</button>
                             </div>
                             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6 }}>
                               {[{ key:"shareCalendar",label:"📅 Next Appt",value:p.nextAppt||"Not scheduled" },{ key:"shareVisitHistory",label:"📋 Visits",value:`${p.visitLog?.length||0} logged` },{ key:"shareTreatmentNotes",label:"📝 Procedure",value:p.procedure||"None" },{ key:"sharePreAuth",label:"📄 Pre-Auth",value:p.preAuth }].map(({ key,label,value })=>{ const shared=p[key]!==false; return (
-                                <div key={key} onClick={()=>updateField(p.id,key,!shared)} style={{ padding:"8px 10px",background:shared?T.lavender:NYU.gray50,borderRadius:8,cursor:"pointer",border:`1px solid ${shared?T.purple+"22":NYU.gray100}` }}>
+                                <div key={key} onClick={()=>updateField(p.id,key,!shared)} style={{ padding:"8px 10px",background:shared?NYU.lavender:NYU.gray50,borderRadius:8,cursor:"pointer",border:`1px solid ${shared?NYU.purple+"22":NYU.gray100}` }}>
                                   <div style={{ fontSize:10,color:NYU.gray400,marginBottom:2 }}>{label} {shared?"🔓":"🔒"}</div>
                                   <div style={{ fontSize:12,fontWeight:600,color:shared?NYU.gray900:NYU.gray300 }}>{shared?value:"Hidden"}</div>
                                 </div>
                               ); })}
                             </div>
-                            {p.handoffNotes&&<div style={{ marginTop:8,padding:"8px 10px",background:T.lavender,borderRadius:8,fontSize:12,color:NYU.gray600,fontStyle:"italic" }}>"{p.handoffNotes}"</div>}
+                            {p.handoffNotes&&<div style={{ marginTop:8,padding:"8px 10px",background:NYU.lavender,borderRadius:8,fontSize:12,color:NYU.gray700,fontStyle:"italic" }}>"{p.handoffNotes}"</div>}
                           </div>
                         );
                       })}
@@ -2489,7 +2452,7 @@ RESPONSE RULES:
                       {needsPartner.map(p=>(
                         <div key={p.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"white",border:`1px solid ${NYU.gray100}`,borderRadius:12,marginBottom:8 }}>
                           <div><div style={{ fontWeight:600,fontSize:14,color:NYU.gray900 }}>{p.alias}</div><div style={{ fontSize:12,color:NYU.gray400 }}>{p.discipline}</div></div>
-                          <button className="action-btn" onClick={()=>{ setDetailPatient(p.id); setShowPairedPanel(false); setTab("roster"); }} style={{ background:T.lavender,color:T.purple,fontSize:11 }}>Assign →</button>
+                          <button className="action-btn" onClick={()=>{ setDetailPatient(p.id); setShowPairedPanel(false); setTab("roster"); }} style={{ background:NYU.lavender,color:NYU.purple,fontSize:11 }}>Assign →</button>
                         </div>
                       ))}
                     </div>
@@ -2510,26 +2473,26 @@ RESPONSE RULES:
               <button onClick={()=>setShowSettings(false)} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:NYU.gray400 }}>×</button>
             </div>
             <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
-              <div style={{ background:T.lavender,borderRadius:14,padding:"16px 18px" }}>
-                <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Profile</div>
+              <div style={{ background:NYU.lavender,borderRadius:14,padding:"16px 18px" }}>
+                <div style={{ fontSize:11,fontWeight:700,color:NYU.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Profile</div>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div><label style={labelStyle}>Full Name</label><input style={inputStyle} value={settingsDraft.name} onChange={e=>setSettingsDraft(p=>({...p,name:e.target.value}))}/></div>
                   <div><label style={labelStyle}>Student Year</label><select style={inputStyle} value={settingsDraft.year} onChange={e=>setSettingsDraft(p=>({...p,year:e.target.value}))}><option>D3</option><option>D4</option></select></div>
                 </div>
               </div>
               <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Graduation</div>
+                <div style={{ fontSize:11,fontWeight:700,color:NYU.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Graduation</div>
                 <div><label style={labelStyle}>Expected Graduation Date</label><input type="date" style={inputStyle} value={settingsDraft.graduationDate} onChange={e=>setSettingsDraft(p=>({...p,graduationDate:e.target.value}))}/></div>
               </div>
               <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4 }}>Clinic Schedule</div>
+                <div style={{ fontSize:11,fontWeight:700,color:NYU.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4 }}>Clinic Schedule</div>
                 <div style={{ fontSize:12,color:NYU.gray400,marginBottom:14 }}>Set which days you have clinic and your hours.</div>
                 <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                   {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(day=>{
                     const sched=settingsDraft.clinicSchedule?.[day]||{ enabled:false,start:"09:00",end:"17:00" };
                     return (
                       <div key={day} style={{ display:"flex",alignItems:"center",gap:10 }}>
-                        <div onClick={()=>setSettingsDraft(p=>({ ...p,clinicSchedule:{ ...p.clinicSchedule,[day]:{ ...sched,enabled:!sched.enabled } } }))} style={{ width:36,height:20,borderRadius:99,background:sched.enabled?T.purple:NYU.gray200,cursor:"pointer",position:"relative",flexShrink:0,transition:"background 0.2s" }}>
+                        <div onClick={()=>setSettingsDraft(p=>({ ...p,clinicSchedule:{ ...p.clinicSchedule,[day]:{ ...sched,enabled:!sched.enabled } } }))} style={{ width:36,height:20,borderRadius:99,background:sched.enabled?NYU.purple:NYU.gray200,cursor:"pointer",position:"relative",flexShrink:0,transition:"background 0.2s" }}>
                           <div style={{ position:"absolute",top:2,left:sched.enabled?18:2,width:16,height:16,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
                         </div>
                         <span style={{ fontSize:13,fontWeight:600,color:sched.enabled?NYU.gray900:NYU.gray400,width:90,textTransform:"capitalize" }}>{day}</span>
@@ -2597,49 +2560,9 @@ RESPONSE RULES:
                 </div>
               </div>
 
-              {/* ── Appearance ── */}
-              <div style={{ background:NYU.gray50,borderRadius:14,padding:"16px 18px" }}>
-                <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Appearance</div>
-
-                <div style={{ marginBottom:16 }}>
-                  <div style={{ fontSize:12,fontWeight:600,color:NYU.gray600,marginBottom:8 }}>Color Theme</div>
-                  <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-                    {Object.entries(THEMES).map(([key,th])=>(
-                      <button key={key} onClick={()=>setThemePreset(key)} title={th.name}
-                        style={{ width:32,height:32,borderRadius:99,background:th.purple,border:themePreset===key?`3px solid ${NYU.gray900}`:"3px solid transparent",cursor:"pointer",fontSize:14,transition:"all 0.15s",outline:"none" }}
-                      >{themePreset===key?"✓":""}</button>
-                    ))}
-                  </div>
-                  <div style={{ fontSize:11,color:NYU.gray400,marginTop:6 }}>Current: {THEMES[themePreset]?.name}</div>
-                </div>
-
-                <div style={{ marginBottom:16 }}>
-                  <div style={{ fontSize:12,fontWeight:600,color:NYU.gray600,marginBottom:8 }}>Tab Order</div>
-                  {dashTabOrder.map((key,i)=>(
-                    <div key={key} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
-                      <div style={{ flex:1,fontSize:13,color:NYU.gray600 }}>{TAB_DEFS[key]?.label}</div>
-                      <button onClick={()=>setDashTabOrder(o=>{const a=[...o];if(i>0){[a[i-1],a[i]]=[a[i],a[i-1]];}return a;})} disabled={i===0} style={{ background:"none",border:`1px solid ${NYU.gray200}`,borderRadius:6,padding:"2px 6px",cursor:"pointer",fontSize:11,color:NYU.gray500 }}>▲</button>
-                      <button onClick={()=>setDashTabOrder(o=>{const a=[...o];if(i<a.length-1){[a[i],a[i+1]]=[a[i+1],a[i]];}return a;})} disabled={i===dashTabOrder.length-1} style={{ background:"none",border:`1px solid ${NYU.gray200}`,borderRadius:6,padding:"2px 6px",cursor:"pointer",fontSize:11,color:NYU.gray500 }}>▼</button>
-                    </div>
-                  ))}
-                </div>
-
-                <div>
-                  <div style={{ fontSize:12,fontWeight:600,color:NYU.gray600,marginBottom:8 }}>Dashboard Stats</div>
-                  <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
-                    {STAT_DEFS.map(s=>{
-                      const on=visibleStats.includes(s.id);
-                      return <button key={s.id} onClick={()=>setVisibleStats(v=>on?v.filter(x=>x!==s.id):[...v,s.id])}
-                        style={{ padding:"5px 12px",borderRadius:99,fontSize:12,fontWeight:500,cursor:"pointer",border:`1.5px solid ${on?T.purple:NYU.gray200}`,background:on?T.purpleLight:"white",color:on?T.purple:NYU.gray500,transition:"all 0.15s" }}
-                      >{s.label}</button>;
-                    })}
-                  </div>
-                </div>
-              </div>
-
               <div style={{ background:NYU.gray50,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
                 <div><div style={{ fontSize:13,fontWeight:600,color:NYU.gray900 }}>ClinIQ</div><div style={{ fontSize:11,color:NYU.gray400,marginTop:2 }}>NYU College of Dentistry · v1.1</div></div>
-                <div style={{ width:36,height:36,borderRadius:10,background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`,display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ color:"white",fontSize:16,fontWeight:700 }}>C</span></div>
+                <div style={{ width:36,height:36,borderRadius:10,background:`linear-gradient(135deg, ${NYU.purple}, ${NYU.accent})`,display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ color:"white",fontSize:16,fontWeight:700 }}>C</span></div>
               </div>
             </div>
             <div style={{ display:"flex",gap:10,marginTop:24 }}>
@@ -2650,12 +2573,12 @@ RESPONSE RULES:
                 if(settingsDraft.clinicSchedule) setClinicSchedule(settingsDraft.clinicSchedule);
                 try {
                   await Promise.all([
-                    fetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({graduationDate:settingsDraft.graduationDate,customGoals,clinicSchedule:settingsDraft.clinicSchedule||clinicSchedule,themePreset,dashTabOrder,visibleStats})}),
+                    fetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({graduationDate:settingsDraft.graduationDate,customGoals,clinicSchedule:settingsDraft.clinicSchedule||clinicSchedule})}),
                     fetch("/api/rotations",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(rotations)}),
                   ]);
                 } catch(e){ console.error("Settings save error:",e); }
                 setShowSettings(false);
-              }} style={{ flex:1,background:T.purple,color:"white" }}>Save Changes</button>
+              }} style={{ flex:1,background:NYU.purple,color:"white" }}>Save Changes</button>
             </div>
           </div>
         </div>

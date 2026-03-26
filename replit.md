@@ -61,3 +61,13 @@ Vite-based React application for NYU College of Dentistry patient tracking.
 - Clinical notebook (per-user notes, pinned, categorized)
 - Calendar with appointment scheduling and external rotations
 - Custom graduation goals and clinic schedule settings
+- Color theme switcher (6 presets: NYU Purple, Ocean Blue, Forest, Rose, Slate, Amber) — persisted per user
+- Dashboard tab reordering via ▲/▼ controls in Settings → Appearance
+- Dashboard stats visibility toggle (show/hide any of the 5 stat cards)
+
+## Theme System
+- `THEMES` constant — 6 presets, each overrides: purple, purpleDark, purpleDeep, purpleLight, purpleMid, accent, lavender
+- `T` object computed inside App from `{ ...NYU, ...THEMES[themePreset] }` — used in all inline styles
+- CSS custom properties (`--t-purple`, `--t-mid`, `--t-dark`, `--t-deep`, `--t-light`, `--t-lav`) injected via `themeVars` style tag for CSS-class-based rules (e.g. `.nlp-box`, `input:focus`)
+- `STAT_DEFS` / `TAB_DEFS` — define the canonical ids and labels for stats/tabs
+- `DEFAULT_TAB_ORDER` — default tab sequence; overrideable per user via settings
