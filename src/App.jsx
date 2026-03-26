@@ -403,6 +403,10 @@ export default function App() {
   const [loginForm, setLoginForm] = useState({ email:"", password:"", name:"", year:"D3" });
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [showForgotPw, setShowForgotPw] = useState(false);
+  const [forgotForm, setForgotForm] = useState({ email:"", newPassword:"", confirm:"" });
+  const [forgotMsg, setForgotMsg] = useState({ type:"", text:"" });
+  const [forgotLoading, setForgotLoading] = useState(false);
   const [appLoading, setAppLoading] = useState(true);
   const [patients, setPatients] = useState([]);
   const [detailPatient, setDetailPatient] = useState(null);
@@ -734,12 +738,12 @@ RESPONSE RULES:
   };
 
   const handleLogin = async () => {
-    if (!loginForm.email||!loginForm.password||!loginForm.name) { setLoginError("Please fill in all fields."); return; }
+    if (!loginForm.email||!loginForm.name) { setLoginError("Please enter your name and email."); return; }
     setLoginLoading(true); setLoginError("");
     try {
       const res = await fetch("/api/auth/login", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ email:loginForm.email, password:loginForm.password, name:loginForm.name, year:loginForm.year })
+        body:JSON.stringify({ email:loginForm.email, password:loginForm.password||"", name:loginForm.name, year:loginForm.year })
       });
       const data = await res.json();
       if (!res.ok) { setLoginError(data.error||"Login failed"); setLoginLoading(false); return; }
@@ -747,6 +751,23 @@ RESPONSE RULES:
       await loadUserData();
     } catch { setLoginError("Connection error. Please try again."); }
     setLoginLoading(false);
+  };
+
+  const handleForgotSubmit = async () => {
+    if (!forgotForm.email) { setForgotMsg({ type:"error", text:"Please enter your email." }); return; }
+    if (!forgotForm.newPassword) { setForgotMsg({ type:"error", text:"Please enter a new password." }); return; }
+    if (forgotForm.newPassword !== forgotForm.confirm) { setForgotMsg({ type:"error", text:"Passwords don't match." }); return; }
+    setForgotLoading(true); setForgotMsg({ type:"", text:"" });
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ email:forgotForm.email, newPassword:forgotForm.newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) { setForgotMsg({ type:"error", text:data.error||"Reset failed" }); }
+      else { setForgotMsg({ type:"success", text:"Password updated! You can now sign in." }); setForgotForm({ email:"", newPassword:"", confirm:"" }); }
+    } catch { setForgotMsg({ type:"error", text:"Connection error. Please try again." }); }
+    setForgotLoading(false);
   };
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method:"POST" });
@@ -839,25 +860,59 @@ RESPONSE RULES:
               <p style={{ color:NYU.gray400, fontSize:14, marginTop:6 }}>NYU College of Dentistry · Clinical Caseload Manager</p>
             </div>
             <div style={{ background:"white", borderRadius:24, padding:32, boxShadow:"0 8px 40px rgba(107,33,168,0.1)", border:`1px solid ${NYU.gray100}` }}>
-              <h2 style={{ fontSize:18, fontWeight:700, color:NYU.gray900, marginBottom:6 }}>Sign in</h2>
-              <p style={{ fontSize:13, color:NYU.gray400, marginBottom:24 }}>Use your NYU credentials to continue</p>
-              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                <div><label style={labelStyle}>Full Name</label><input style={inputStyle} placeholder="e.g. Whitney Johnson" value={loginForm.name} onChange={e=>setLoginForm(p=>({...p,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} /></div>
-                <div><label style={labelStyle}>NYU Email</label><input style={inputStyle} type="email" placeholder="wj1234@nyu.edu" value={loginForm.email} onChange={e=>setLoginForm(p=>({...p,email:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} /></div>
-                <div><label style={labelStyle}>Password</label><input style={inputStyle} type="password" placeholder="••••••••" value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} /></div>
-                <div>
-                  <label style={labelStyle}>Student Year</label>
-                  <select style={inputStyle} value={loginForm.year} onChange={e=>setLoginForm(p=>({...p,year:e.target.value}))}>
-                    <option>D3</option><option>D4</option>
-                  </select>
-                  <div style={{ fontSize:11, color:NYU.gray400, marginTop:6 }}>D1 and D2 students do not have active patient access.</div>
-                </div>
-                {loginError && <div style={{ background:NYU.redLight, borderRadius:10, padding:"10px 14px", fontSize:13, color:NYU.red }}>{loginError}</div>}
-                <button className="action-btn" onClick={handleLogin} disabled={loginLoading} style={{ background:T.purple, color:"white", width:"100%", marginTop:4, padding:"13px 20px", fontSize:15, opacity:loginLoading?0.7:1 }}>{loginLoading?<><span className="spinner"/>Signing in…</>:"Sign In"}</button>
+
+              {/* Testing mode banner */}
+              <div style={{ background:"#fef9c3", border:"1px solid #fde047", borderRadius:10, padding:"8px 12px", marginBottom:20, display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:14 }}>🧪</span>
+                <span style={{ fontSize:12, color:"#92400e", fontWeight:500 }}>Testing mode — password not required</span>
               </div>
-              <p style={{ fontSize:11, color:NYU.gray400, textAlign:"center", marginTop:20, lineHeight:1.5 }}>
-                Production version will authenticate via NYU SSO.<br/>Patient data uses HIPAA-safe identifiers — no PHI stored or transmitted.
-              </p>
+
+              {!showForgotPw ? (
+                <>
+                  <h2 style={{ fontSize:18, fontWeight:700, color:NYU.gray900, marginBottom:6 }}>Sign in</h2>
+                  <p style={{ fontSize:13, color:NYU.gray400, marginBottom:24 }}>Use your NYU credentials to continue</p>
+                  <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                    <div><label style={labelStyle}>Full Name</label><input style={inputStyle} placeholder="e.g. Whitney Johnson" value={loginForm.name} onChange={e=>setLoginForm(p=>({...p,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} /></div>
+                    <div><label style={labelStyle}>NYU Email</label><input style={inputStyle} type="email" placeholder="wj1234@nyu.edu" value={loginForm.email} onChange={e=>setLoginForm(p=>({...p,email:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} /></div>
+                    <div>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+                        <label style={{ ...labelStyle, marginBottom:0 }}>Password</label>
+                        <button onClick={()=>{ setShowForgotPw(true); setForgotMsg({ type:"", text:"" }); }} style={{ background:"none", border:"none", fontSize:12, color:T.purple, cursor:"pointer", fontFamily:"'Inter', sans-serif", fontWeight:500, padding:0 }}>Forgot password?</button>
+                      </div>
+                      <input style={inputStyle} type="password" placeholder="Optional during testing" value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Student Year</label>
+                      <select style={inputStyle} value={loginForm.year} onChange={e=>setLoginForm(p=>({...p,year:e.target.value}))}>
+                        <option>D3</option><option>D4</option>
+                      </select>
+                      <div style={{ fontSize:11, color:NYU.gray400, marginTop:6 }}>D1 and D2 students do not have active patient access.</div>
+                    </div>
+                    {loginError && <div style={{ background:NYU.redLight, borderRadius:10, padding:"10px 14px", fontSize:13, color:NYU.red }}>{loginError}</div>}
+                    <button className="action-btn" onClick={handleLogin} disabled={loginLoading} style={{ background:T.purple, color:"white", width:"100%", marginTop:4, padding:"13px 20px", fontSize:15, opacity:loginLoading?0.7:1 }}>{loginLoading?<><span className="spinner"/>Signing in…</>:"Sign In"}</button>
+                  </div>
+                  <p style={{ fontSize:11, color:NYU.gray400, textAlign:"center", marginTop:20, lineHeight:1.5 }}>
+                    Production version will authenticate via NYU SSO.<br/>Patient data uses HIPAA-safe identifiers — no PHI stored or transmitted.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <button onClick={()=>{ setShowForgotPw(false); setForgotMsg({ type:"", text:"" }); }} style={{ background:"none", border:"none", color:NYU.gray400, cursor:"pointer", fontSize:13, fontFamily:"'Inter', sans-serif", marginBottom:16, padding:0, display:"flex", alignItems:"center", gap:6 }}>← Back to sign in</button>
+                  <h2 style={{ fontSize:18, fontWeight:700, color:NYU.gray900, marginBottom:6 }}>Reset Password</h2>
+                  <p style={{ fontSize:13, color:NYU.gray400, marginBottom:24 }}>Enter your email and choose a new password.</p>
+                  <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                    <div><label style={labelStyle}>NYU Email</label><input style={inputStyle} type="email" placeholder="wj1234@nyu.edu" value={forgotForm.email} onChange={e=>setForgotForm(p=>({...p,email:e.target.value}))} /></div>
+                    <div><label style={labelStyle}>New Password</label><input style={inputStyle} type="password" placeholder="New password" value={forgotForm.newPassword} onChange={e=>setForgotForm(p=>({...p,newPassword:e.target.value}))} /></div>
+                    <div><label style={labelStyle}>Confirm Password</label><input style={inputStyle} type="password" placeholder="Confirm new password" value={forgotForm.confirm} onChange={e=>setForgotForm(p=>({...p,confirm:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleForgotSubmit()} /></div>
+                    {forgotMsg.text && (
+                      <div style={{ background:forgotMsg.type==="success"?"#dcfce7":NYU.redLight, borderRadius:10, padding:"10px 14px", fontSize:13, color:forgotMsg.type==="success"?NYU.green:NYU.red }}>
+                        {forgotMsg.type==="success"?"✓ ":""}{forgotMsg.text}
+                      </div>
+                    )}
+                    <button className="action-btn" onClick={handleForgotSubmit} disabled={forgotLoading} style={{ background:T.purple, color:"white", width:"100%", padding:"13px 20px", fontSize:15, opacity:forgotLoading?0.7:1 }}>{forgotLoading?<><span className="spinner"/>Updating…</>:"Update Password"}</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

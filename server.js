@@ -62,23 +62,21 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password, name, year } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Missing email or password' });
+  if (!email) return res.status(400).json({ error: 'Missing email' });
   try {
     let result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
     let user = result.rows[0];
     if (!user) {
-      // auto-register on first login (NYU SSO simulation)
-      const hash = await bcrypt.hash(password, 10);
+      // auto-register on first login
+      const hash = await bcrypt.hash(password || 'testing-placeholder', 10);
       const ins = await pool.query(
         'INSERT INTO users (name, email, password_hash, year) VALUES ($1,$2,$3,$4) RETURNING id, name, email, year',
         [name || email.split('@')[0], email.toLowerCase(), hash, year || 'D3']
       );
       user = ins.rows[0];
       await pool.query('INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [user.id]);
-    } else {
-      const ok = await bcrypt.compare(password, user.password_hash);
-      if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
     }
+    // NOTE: password verification bypassed for testing phase — re-enable before production
     req.session.userId = user.id;
     req.session.userName = user.name;
     req.session.userYear = user.year;
@@ -86,6 +84,21 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (err) {
     console.error('Login error:', err.message);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { email, newPassword } = req.body;
+  if (!email || !newPassword) return res.status(400).json({ error: 'Missing fields' });
+  try {
+    const result = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+    if (!result.rows[0]) return res.status(404).json({ error: 'No account found with that email' });
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE email = $2', [hash, email.toLowerCase()]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Reset error:', err.message);
+    res.status(500).json({ error: 'Reset failed' });
   }
 });
 
