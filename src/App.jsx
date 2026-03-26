@@ -295,6 +295,7 @@ const emptyPatient = {
   notes:"", visitLog:[],
   handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
   patientLanguage:"English",
+  isPrimaryProvider:true, sharedWithD3:false,
 };
 
 const SUPPORTED_LANGUAGES = [
@@ -658,7 +659,7 @@ Note: "${nlpInput}"` }]
     const visitsPerWeek = recentVisits/4;
     const totalRequired = customGoals.filter(g=>g.visible).reduce((s,g)=>s+g.required,0);
     const totalCompleted = customGoals.filter(g=>g.visible).reduce((s,g)=>{
-      return s+patients.filter(p=>p.discipline===g.discipline).reduce((sum,p)=>sum+(p.visitLog?.length||0),0);
+      return s+patients.filter(p=>p.discipline===g.discipline&&p.isPrimaryProvider!==false).reduce((sum,p)=>sum+(p.visitLog?.length||0),0);
     },0);
     const totalRemaining = Math.max(0,totalRequired-totalCompleted);
     const projectedAdditional = Math.floor(visitsPerWeek*weeksToGraduation);
@@ -674,11 +675,12 @@ Note: "${nlpInput}"` }]
       const preAuthNudge = getPreAuthNudge(p);
       const labNudge = getLabNudge(p);
       const langNote = p.patientLanguage && p.patientLanguage!=="English" ? `, preferred language: ${p.patientLanguage}` : "";
-      return `- ${p.alias} (chart:${p.chartNumber}): ${p.discipline}, ${completed}/${required} visits, last seen ${p.lastVisit||"never"}, next: ${p.nextAppt||"not scheduled"}, pre-auth: ${p.preAuth}, lab: ${p.labStatus}${pred?`, est. completion: ${pred.date}`:""}${preAuthNudge?`, PRE-AUTH: ${preAuthNudge.label}`:""}${labNudge?`, LAB: ${labNudge.label}`:""}${langNote}`;
+      const roleNote = p.isPrimaryProvider!==false ? ", primary: yes" : ", primary: no";
+      return `- ${p.alias} (chart:${p.chartNumber}): ${p.discipline}, ${completed}/${required} visits, last seen ${p.lastVisit||"never"}, next: ${p.nextAppt||"not scheduled"}, pre-auth: ${p.preAuth}, lab: ${p.labStatus}${pred?`, est. completion: ${pred.date}`:""}${preAuthNudge?`, PRE-AUTH: ${preAuthNudge.label}`:""}${labNudge?`, LAB: ${labNudge.label}`:""}${langNote}${roleNote}`;
     }).join("\n");
     const requirementsSummary = customGoals.filter(g=>g.visible).map(g=>{
-      const completed = patients.filter(p=>p.discipline===g.discipline).reduce((s,p)=>s+(p.visitLog?.length||0),0);
-      return `- ${g.discipline}: ${completed}/${g.required}`;
+      const completed = patients.filter(p=>p.discipline===g.discipline&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
+      return `- ${g.discipline}: ${completed}/${g.required} (primary provider visits only)`;
     }).join("\n");
     const upcomingAppts = patients.filter(p=>p.nextAppt&&p.nextAppt>=fmt(today)).sort((a,b)=>a.nextAppt.localeCompare(b.nextAppt)).map(p=>`- ${p.nextAppt}: ${p.alias} (${p.procedure||p.discipline})`).join("\n");
     const notebookContext = notes.map(n=>`- [${n.category}] "${n.title}": ${n.body?.slice(0,150)}`).join("\n");
@@ -846,14 +848,14 @@ RESPONSE RULES:
   const visitsPerWeek = recentVisits/4;
   const totalRequired = customGoals.filter(g=>g.visible).reduce((s,g)=>s+g.required,0);
   const totalCompleted = customGoals.filter(g=>g.visible).reduce((s,g)=>{
-    return s+patients.filter(p=>p.discipline===g.discipline).reduce((sum,p)=>sum+(p.visitLog?.length||0),0);
+    return s+patients.filter(p=>p.discipline===g.discipline&&p.isPrimaryProvider!==false).reduce((sum,p)=>sum+(p.visitLog?.length||0),0);
   },0);
   const totalRemaining = Math.max(0,totalRequired-totalCompleted);
   const projectedAdditional = Math.floor(visitsPerWeek*weeksToGraduation);
   const onTrack = projectedAdditional>=totalRemaining;
   const velocityPct = Math.min(100,Math.round((totalCompleted/totalRequired)*100));
   const atRiskRequirements = customGoals.filter(g=>g.visible).filter(g=>{
-    const completed = patients.filter(p=>p.discipline===g.discipline).reduce((s,p)=>s+(p.visitLog?.length||0),0);
+    const completed = patients.filter(p=>p.discipline===g.discipline&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
     const remaining = g.required-completed;
     const projectedForThis = Math.floor((completed/Math.max(totalCompleted,1))*projectedAdditional);
     return remaining>0 && projectedForThis<remaining;
@@ -1721,10 +1723,14 @@ RESPONSE RULES:
               )}
 
               {!editingGoals&&customGoals.filter(g=>g.visible).map(goal=>{
-                const completed=patients.filter(p=>p.discipline===goal.discipline).reduce((s,p)=>s+(p.visitLog?.length||0),0);
+                const primaryPatients=patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider!==false);
+                const supportingPatients=patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider===false);
+                const primaryVisits=primaryPatients.reduce((s,p)=>s+(p.visitLog?.length||0),0);
+                const supportingVisits=supportingPatients.reduce((s,p)=>s+(p.visitLog?.length||0),0);
+                const completed=primaryVisits;
                 const pct=Math.min((completed/goal.required)*100,100);
                 const color=pct>=100?NYU.green:pct>=60?NYU.blue:pct>=30?NYU.amber:NYU.red;
-                const qualifyingPatients=patients.filter(p=>p.discipline===goal.discipline&&!p.treatmentComplete);
+                const qualifyingPatients=primaryPatients.filter(p=>!p.treatmentComplete);
                 return (
                   <div key={goal.discipline} className="card" style={{ padding:"16px 20px" }}>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
@@ -1736,8 +1742,12 @@ RESPONSE RULES:
                       </div>
                     </div>
                     <div className="progress-bar"><div className="progress-fill" style={{ width:`${pct}%`,background:color }}/></div>
+                    <div style={{ marginTop:8,fontSize:11,color:NYU.gray400 }}>
+                      <span style={{ fontWeight:600,color:"#0f766e" }}>{primaryVisits} visits as primary</span>
+                      {supportingVisits>0&&<span> · <span style={{ color:NYU.gray500 }}>{supportingVisits} as supporting</span></span>}
+                    </div>
                     {qualifyingPatients.length>0&&(
-                      <div style={{ marginTop:10,fontSize:12,color:NYU.gray600 }}>
+                      <div style={{ marginTop:6,fontSize:12,color:NYU.gray600 }}>
                         <span style={{ fontWeight:600,color:T.purple }}>Active: </span>
                         {qualifyingPatients.map(p=>p.alias).join(", ")}
                       </div>
@@ -1783,6 +1793,12 @@ RESPONSE RULES:
                       <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:3 }}>
                         <span style={{ fontWeight:700,fontSize:15,color:NYU.gray900 }}>{patient.alias}</span>
                         <span style={{ fontSize:10,color:NYU.gray400 }}>{patient.id}</span>
+                        {patient.isPrimaryProvider!==false
+                          ? <span style={{ fontSize:10,fontWeight:700,color:"#0f766e",background:"#ccfbf1",borderRadius:99,padding:"2px 7px" }}>Primary</span>
+                          : patient.handoffPartner
+                            ? <span style={{ fontSize:10,fontWeight:700,color:NYU.gray500,background:NYU.gray100,borderRadius:99,padding:"2px 7px" }}>Supporting</span>
+                            : null
+                        }
                       </div>
                       <div style={{ fontSize:12,color:NYU.gray400 }}>{patient.procedure||"No procedure"} · {patient.discipline}</div>
                       {(preAuthNudge||labNudge)&&(
@@ -1914,6 +1930,32 @@ RESPONSE RULES:
                 <div><label style={labelStyle}>Treatment Start</label><input type="date" style={inputStyle} value={newPatient.treatmentStart} onChange={e=>setNewPatient(p=>({...p,treatmentStart:e.target.value,lastVisit:e.target.value}))}/></div>
                 <div><label style={labelStyle}>Expected Completion</label><input type="date" style={inputStyle} value={newPatient.expectedCompletion} onChange={e=>setNewPatient(p=>({...p,expectedCompletion:e.target.value}))}/></div>
               </div>
+              {/* Primary provider checkbox */}
+              <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",borderRadius:10,background:newPatient.isPrimaryProvider?T.lavender:"#f9fafb",border:`1.5px solid ${newPatient.isPrimaryProvider?T.purpleLight:NYU.gray200}`,transition:"all 0.15s" }}>
+                <input type="checkbox" checked={newPatient.isPrimaryProvider} onChange={e=>setNewPatient(p=>({...p,isPrimaryProvider:e.target.checked,sharedWithD3:e.target.checked?p.sharedWithD3:false}))} style={{ width:16,height:16,accentColor:T.purple,cursor:"pointer" }}/>
+                <span style={{ fontSize:13,fontWeight:600,color:newPatient.isPrimaryProvider?T.purple:NYU.gray500 }}>I am the primary provider for this patient</span>
+              </label>
+              {/* D4 sharing prompt — only for D4 primary providers */}
+              {newPatient.isPrimaryProvider && user?.year==="D4" && (
+                <div style={{ borderRadius:12,border:`1.5px solid ${NYU.gray200}`,overflow:"hidden" }}>
+                  <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 14px",background:"white" }}>
+                    <input type="checkbox" checked={newPatient.sharedWithD3} onChange={e=>setNewPatient(p=>({...p,sharedWithD3:e.target.checked,handoffPartner:e.target.checked?p.handoffPartner:"",handoffNotes:""}))} style={{ width:16,height:16,accentColor:T.purple,cursor:"pointer" }}/>
+                    <span style={{ fontSize:13,fontWeight:500,color:NYU.gray700 }}>Would you like to share this patient with a D3?</span>
+                  </label>
+                  {newPatient.sharedWithD3 && (
+                    <div style={{ borderTop:`1px solid ${NYU.gray100}`,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10,background:"#fafafa" }}>
+                      <div>
+                        <label style={{ ...labelStyle,marginBottom:4 }}>D3 Name</label>
+                        <input style={inputStyle} placeholder="e.g. Marcus Reid" value={newPatient.handoffPartner||""} onChange={e=>setNewPatient(p=>({...p,handoffPartner:e.target.value,handoffPartnerYear:"D3"}))}/>
+                      </div>
+                      <div>
+                        <label style={{ ...labelStyle,marginBottom:4 }}>Notes for D3 <span style={{ fontWeight:400,color:NYU.gray400 }}>(optional)</span></label>
+                        <textarea rows={2} style={{ ...inputStyle,resize:"none",fontSize:13 }} placeholder="e.g. patient prefers morning appointments, crown still pending" value={newPatient.handoffNotes||""} onChange={e=>setNewPatient(p=>({...p,handoffNotes:e.target.value}))}/>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {addPatientError && (
                 <div style={{ background:NYU.redLight,borderRadius:10,padding:"10px 14px",fontSize:13,color:NYU.red,display:"flex",alignItems:"center",gap:8 }}>
                   <span>⚠️</span><span>{addPatientError}</span>
@@ -2262,14 +2304,37 @@ RESPONSE RULES:
               <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
                   <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>🤝 Paired Provider</div>
-                  <span style={{ fontSize:11,padding:"3px 10px",borderRadius:99,background:patient.handoffPartner?NYU.greenLight:NYU.gray100,color:patient.handoffPartner?NYU.green:NYU.gray400,fontWeight:600 }}>{patient.handoffPartner?"Active":"Not Assigned"}</span>
+                  {patient.isPrimaryProvider!==false
+                    ? <span style={{ fontSize:11,padding:"3px 10px",borderRadius:99,background:"#ccfbf1",color:"#0f766e",fontWeight:700 }}>You are the primary provider</span>
+                    : patient.handoffPartner
+                      ? <span style={{ fontSize:11,padding:"3px 10px",borderRadius:99,background:NYU.gray100,color:NYU.gray500,fontWeight:600 }}>Supporting role</span>
+                      : <span style={{ fontSize:11,padding:"3px 10px",borderRadius:99,background:NYU.gray100,color:NYU.gray400,fontWeight:600 }}>Not Assigned</span>
+                  }
                 </div>
-                <div style={{ display:"grid",gridTemplateColumns:"1fr auto",gap:10,marginBottom:14 }}>
-                  <div><div style={{ fontSize:11,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6 }}>Provider Name</div><input style={inputStyle} placeholder="e.g. Marcus Reid" value={patient.handoffPartner||""} onChange={e=>updateField(patient.id,"handoffPartner",e.target.value)}/></div>
-                  <div><div style={{ fontSize:11,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6 }}>Year</div><select style={{ ...inputStyle,width:80 }} value={patient.handoffPartnerYear||"D3"} onChange={e=>updateField(patient.id,"handoffPartnerYear",e.target.value)}><option>D3</option><option>D4</option></select></div>
-                </div>
-                <div><div style={{ fontSize:11,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6 }}>Shared Notes</div><textarea rows={3} style={{ ...inputStyle,resize:"vertical",fontSize:13 }} placeholder="Notes visible to your paired provider..." value={patient.handoffNotes||""} onChange={e=>updateField(patient.id,"handoffNotes",e.target.value)}/></div>
-                {patient.handoffPartner&&<div style={{ background:NYU.greenLight,borderRadius:10,padding:"10px 14px",marginTop:14,display:"flex",alignItems:"center",gap:8 }}><span>✅</span><span style={{ fontSize:13,fontWeight:600,color:NYU.green }}>Sharing active with @{patient.handoffPartner} ({patient.handoffPartnerYear})</span></div>}
+                {/* Primary provider toggle */}
+                <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 12px",borderRadius:10,background:patient.isPrimaryProvider!==false?T.lavender:"#f9fafb",border:`1.5px solid ${patient.isPrimaryProvider!==false?T.purpleLight:NYU.gray200}`,marginBottom:14,transition:"all 0.15s" }}>
+                  <input type="checkbox" checked={patient.isPrimaryProvider!==false} onChange={e=>updateField(patient.id,"isPrimaryProvider",e.target.checked)} style={{ width:16,height:16,accentColor:T.purple,cursor:"pointer" }}/>
+                  <span style={{ fontSize:13,fontWeight:600,color:patient.isPrimaryProvider!==false?T.purple:NYU.gray500 }}>I am the primary provider for this patient</span>
+                </label>
+                {/* Shared-with-D3 section (D4 primary providers only) */}
+                {patient.isPrimaryProvider!==false && (
+                  <>
+                    <div style={{ display:"grid",gridTemplateColumns:"1fr auto",gap:10,marginBottom:14 }}>
+                      <div><div style={{ fontSize:11,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6 }}>D3 Partner Name</div><input style={inputStyle} placeholder="e.g. Marcus Reid" value={patient.handoffPartner||""} onChange={e=>updateField(patient.id,"handoffPartner",e.target.value)}/></div>
+                      <div><div style={{ fontSize:11,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6 }}>Year</div><select style={{ ...inputStyle,width:80 }} value={patient.handoffPartnerYear||"D3"} onChange={e=>updateField(patient.id,"handoffPartnerYear",e.target.value)}><option>D3</option><option>D4</option></select></div>
+                    </div>
+                    <div><div style={{ fontSize:11,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6 }}>Shared Notes</div><textarea rows={3} style={{ ...inputStyle,resize:"vertical",fontSize:13 }} placeholder="Notes visible to your paired provider..." value={patient.handoffNotes||""} onChange={e=>updateField(patient.id,"handoffNotes",e.target.value)}/></div>
+                    {patient.handoffPartner&&<div style={{ background:NYU.greenLight,borderRadius:10,padding:"10px 14px",marginTop:14,display:"flex",alignItems:"center",gap:8 }}><span>✅</span><span style={{ fontSize:13,fontWeight:600,color:NYU.green }}>Sharing active with @{patient.handoffPartner} ({patient.handoffPartnerYear})</span></div>}
+                  </>
+                )}
+                {/* Supporting provider view */}
+                {patient.isPrimaryProvider===false && patient.handoffPartner && (
+                  <div style={{ background:NYU.gray50||"#f9fafb",borderRadius:10,padding:"12px 14px",fontSize:13,color:NYU.gray600,lineHeight:1.6 }}>
+                    <div style={{ fontWeight:600,color:NYU.gray900,marginBottom:4 }}>Shared by {patient.handoffPartner} ({patient.handoffPartnerYear})</div>
+                    <div style={{ fontSize:12,color:NYU.gray400 }}>You have read access to all visits, notes, and the treatment plan for this patient.</div>
+                    {patient.handoffNotes&&<div style={{ marginTop:8,padding:"8px 10px",background:"white",borderRadius:8,fontSize:12,color:NYU.gray700,border:`1px solid ${NYU.gray100}` }}>📝 {patient.handoffNotes}</div>}
+                  </div>
+                )}
               </div>
 
               {/* Mark Complete */}

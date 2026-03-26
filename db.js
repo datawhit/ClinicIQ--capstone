@@ -37,6 +37,8 @@ export async function initDb() {
       handoff_partner_year TEXT DEFAULT 'D3',
       handoff_notes TEXT DEFAULT '',
       patient_language TEXT DEFAULT 'English',
+      is_primary_provider BOOLEAN DEFAULT true,
+      shared_with_d3 BOOLEAN DEFAULT false,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -81,6 +83,11 @@ export async function initDb() {
       custom_goals JSONB DEFAULT '[]',
       clinic_schedule JSONB DEFAULT '{}'
     );
+  `);
+  // Migrate existing tables — safe to run multiple times
+  await pool.query(`
+    ALTER TABLE patients ADD COLUMN IF NOT EXISTS is_primary_provider BOOLEAN DEFAULT true;
+    ALTER TABLE patients ADD COLUMN IF NOT EXISTS shared_with_d3 BOOLEAN DEFAULT false;
   `);
   console.log('Database schema initialized');
 }

@@ -152,6 +152,8 @@ app.get('/api/patients', requireAuth, async (req, res) => {
       handoffPartnerYear: p.handoff_partner_year,
       handoffNotes: p.handoff_notes,
       patientLanguage: p.patient_language,
+      isPrimaryProvider: p.is_primary_provider !== false,
+      sharedWithD3: p.shared_with_d3 || false,
       visitLog: visits
         .filter(v => v.patient_id === p.id)
         .map(v => ({ id: v.id, date: v.visit_date, procedure: v.procedure, notes: v.notes, cdtCode: v.cdt_code })),
@@ -176,14 +178,14 @@ app.post('/api/patients', requireAuth, async (req, res) => {
       INSERT INTO patients (id,user_id,alias,chart_number,procedure,discipline,last_visit,treatment_start,
         expected_completion,next_appt,next_appt_time,treatment_complete,lab_status,lab_sent_date,
         lab_received_date,pre_auth,pre_auth_submitted_date,notes,handoff_partner,handoff_partner_year,
-        handoff_notes,patient_language)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
+        handoff_notes,patient_language,is_primary_provider,shared_with_d3)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
       [id, req.session.userId, alias, p.chartNumber||'', p.procedure||'', p.discipline||'General Dentistry',
        p.lastVisit||'', p.treatmentStart||'', p.expectedCompletion||'', p.nextAppt||null,
        p.nextApptTime||'', p.treatmentComplete||false, p.labStatus||'None', p.labSentDate||'',
        p.labReceivedDate||'', p.preAuth||'Not Submitted', p.preAuthSubmittedDate||'',
        p.notes||'', p.handoffPartner||'', p.handoffPartnerYear||'D3', p.handoffNotes||'',
-       p.patientLanguage||'English']
+       p.patientLanguage||'English', p.isPrimaryProvider !== false, p.sharedWithD3||false]
     );
     // seed initial visit if provided
     if (p.lastVisit && p.procedure) {
@@ -205,6 +207,8 @@ app.post('/api/patients', requireAuth, async (req, res) => {
       preAuth: row.pre_auth, preAuthSubmittedDate: row.pre_auth_submitted_date, notes: row.notes,
       handoffPartner: row.handoff_partner, handoffPartnerYear: row.handoff_partner_year,
       handoffNotes: row.handoff_notes, patientLanguage: row.patient_language,
+      isPrimaryProvider: row.is_primary_provider !== false,
+      sharedWithD3: row.shared_with_d3 || false,
       visitLog: visits.map(v => ({ id: v.id, date: v.visit_date, procedure: v.procedure, notes: v.notes, cdtCode: v.cdt_code })),
     });
   } catch (err) {
@@ -222,15 +226,17 @@ app.put('/api/patients/:id', requireAuth, async (req, res) => {
         expected_completion=$6, next_appt=$7, next_appt_time=$8, treatment_complete=$9,
         lab_status=$10, lab_sent_date=$11, lab_received_date=$12, pre_auth=$13,
         pre_auth_submitted_date=$14, notes=$15, handoff_partner=$16, handoff_partner_year=$17,
-        handoff_notes=$18, patient_language=$19, updated_at=NOW()
-      WHERE id=$20 AND user_id=$21`,
+        handoff_notes=$18, patient_language=$19, is_primary_provider=$20, shared_with_d3=$21,
+        updated_at=NOW()
+      WHERE id=$22 AND user_id=$23`,
       [p.chartNumber||'', p.procedure||'', p.discipline||'General Dentistry',
        p.lastVisit||'', p.treatmentStart||'', p.expectedCompletion||'',
        p.nextAppt||null, p.nextApptTime||'', p.treatmentComplete||false,
        p.labStatus||'None', p.labSentDate||'', p.labReceivedDate||'',
        p.preAuth||'Not Submitted', p.preAuthSubmittedDate||'', p.notes||'',
        p.handoffPartner||'', p.handoffPartnerYear||'D3', p.handoffNotes||'',
-       p.patientLanguage||'English', req.params.id, req.session.userId]
+       p.patientLanguage||'English', p.isPrimaryProvider !== false, p.sharedWithD3||false,
+       req.params.id, req.session.userId]
     );
     res.json({ ok: true });
   } catch (err) {

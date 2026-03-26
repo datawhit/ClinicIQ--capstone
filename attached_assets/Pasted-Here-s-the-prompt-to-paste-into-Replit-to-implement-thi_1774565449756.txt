@@ -1,0 +1,68 @@
+Here's the prompt to paste into Replit to implement this:
+
+---
+
+In the Add New Patient modal, make the following changes:
+
+**Step 1 — Add a Primary Provider checkbox**
+
+Below the Expected Completion date fields, add a checkbox row:
+
+```
+[ ] I am the primary provider for this patient
+```
+
+Default it to checked. Store this as `isPrimaryProvider: true` in the patient object. Add `isPrimaryProvider: false` to `emptyPatient` as a new field.
+
+**Step 2 — Conditional sharing prompt**
+
+When the user checks "I am the primary provider" AND their year is D4, show a follow-up section directly below the checkbox (no separate modal needed, just expand inline):
+
+```
+Would you like to share this patient with a D3?
+
+[ ] Yes, share with a D3
+
+If yes, show:
+  D3 Name: [text input]
+  D3 Email: [text input — optional]
+  Notes for D3: [textarea — optional, placeholder "e.g. patient prefers morning appointments, crown still pending"]
+```
+
+If the student is D3, skip the sharing prompt entirely — D3s do not assign D4 partners from this modal.
+
+**Step 3 — What sharing means**
+
+When a patient is shared with a D3, set these fields on the patient object:
+- `handoffPartner` — the D3's name
+- `handoffPartnerYear` — "D3"  
+- `handoffNotes` — the notes entered
+- `sharedWithD3` — true
+
+**Step 4 — Patient card and detail screen**
+
+On the patient roster card, show a badge:
+- If `isPrimaryProvider` is true: show a small teal pill that says "Primary"
+- If `isPrimaryProvider` is false and `handoffPartner` is set: show a gray pill that says "Supporting"
+
+On the patient detail screen, in the Paired Provider section, update the language:
+
+If the logged-in user is D4 and `isPrimaryProvider` is true:
+- Show "You are the primary provider"
+- Show the D3 sharing section with the D3's name and a toggle to manage what the D3 can see
+
+If the logged-in user is D3 and `handoffPartner` matches their name:
+- Show "Shared by [D4 name]" with a read indicator
+- The D3 can see all visits, all notes, and the treatment plan but cannot edit primary provider fields
+
+**Step 5 — Graduation requirements**
+
+In the graduation requirements calculation, only count visits toward the logged-in student's requirements if `isPrimaryProvider` is true for that patient. Add a note below each discipline bar that says "X visits as primary · Y visits as supporting" so students can see both numbers.
+
+**Step 6 — AI assistant context**
+
+In the caseload summary string passed to the AI system prompt, add `primary: yes/no` to each patient line so the assistant knows which cases to count toward graduation requirements when answering questions about progress.
+
+---
+
+That covers the full flow cleanly without overcomplicating the UI. The inline expand on the modal is much smoother than a separate popup. Want me to also update the LLM Prompt Appendix to document this as a new feature?

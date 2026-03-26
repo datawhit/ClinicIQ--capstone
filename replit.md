@@ -64,6 +64,10 @@ Vite-based React application for NYU College of Dentistry patient tracking.
 - Color theme switcher (6 presets: NYU Purple, Ocean Blue, Forest, Rose, Slate, Amber) — persisted per user
 - Dashboard tab reordering via ▲/▼ controls in Settings → Appearance
 - Dashboard stats visibility toggle (show/hide any of the 5 stat cards)
+- Primary/Supporting provider role per patient — set at add-time, editable in detail view
+- D4 students can share patients with a D3 from the Add Patient modal (inline expand)
+- Graduation requirements count only primary-provider visits; breakdown shows "X as primary · Y as supporting"
+- AI assistant context includes `primary: yes/no` per patient line
 
 ## Theme System
 - `THEMES` constant — 6 presets, each overrides: purple, purpleDark, purpleDeep, purpleLight, purpleMid, accent, lavender
