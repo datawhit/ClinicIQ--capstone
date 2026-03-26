@@ -168,7 +168,8 @@ app.post('/api/patients', requireAuth, async (req, res) => {
   try {
     const { rows: existing } = await pool.query('SELECT COUNT(*) FROM patients WHERE user_id=$1', [req.session.userId]);
     const count = parseInt(existing[0].count);
-    const id = p.id || `PT-${String(count + 1).padStart(3, '0')}`;
+    // Use timestamp-based ID to guarantee uniqueness regardless of deletes/gaps
+    const id = `PT-${Date.now().toString(36).toUpperCase()}`;
     const year = new Date().getFullYear();
     const alias = p.alias || `P-${year}-${String(count + 1).padStart(3, '0')}`;
     await pool.query(`
