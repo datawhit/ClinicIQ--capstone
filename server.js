@@ -610,10 +610,10 @@ app.post('/api/demo/seed', requireAuth, async (req, res) => {
       const id = `NOTE-${uid36()}`;
       const now = new Date().toISOString();
       await pool.query(
-        'INSERT INTO student_notes (id,user_id,title,body,category,pinned,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-        [id, uid, n.title, n.body, n.category||'General', n.pinned||false, now, now]
+        'INSERT INTO student_notes (id,user_id,title,body,category,pinned,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [id, uid, n.title, n.body, n.category||'General', n.pinned||false, now]
       );
-      insertedNotes.push({ id, title: n.title, body: n.body, category: n.category||'General', pinned: n.pinned||false, createdAt: now, updatedAt: now });
+      insertedNotes.push({ id, title: n.title, body: n.body, category: n.category||'General', pinned: n.pinned||false, updatedAt: now });
     }
 
     console.log(`Demo seed: ${insertedPatients.length} patients, ${insertedRotations.length} rotations, ${insertedNotes.length} notes for user ${uid}`);
