@@ -399,6 +399,231 @@ app.put('/api/rotations', requireAuth, async (req, res) => {
   }
 });
 
+// ── Demo Seed ─────────────────────────────────────────────────────────────────
+
+app.post('/api/demo/seed', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  const uid36 = () => `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substr(2,4).toUpperCase()}`;
+
+  const demoPatients = [
+    {
+      chartNumber:"1047823", procedure:"Root Canal - Molar", discipline:"Endodontics",
+      treatmentStart:"2026-01-15", expectedCompletion:"2026-04-15",
+      nextAppt:"2026-04-02", nextApptTime:"09:00", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Approved", preAuthSubmittedDate:"2026-01-20",
+      notes:"Patient tolerated well. Final restoration pending. Prefers morning appointments.",
+      isPrimaryProvider:true, patientLanguage:"English",
+      handoffPartner:"Marcus Reid", handoffPartnerYear:"D3",
+      handoffNotes:"Crown placement still pending. Patient prefers morning appointments.",
+      visits:[
+        { date:"2026-01-15", procedure:"Initial Exam", notes:"Treatment plan accepted." },
+        { date:"2026-02-10", procedure:"Root Canal - Molar", notes:"First appointment, access opened." },
+        { date:"2026-03-20", procedure:"Root Canal - Molar", notes:"Obturation complete. Sent for crown prep." }
+      ]
+    },
+    {
+      chartNumber:"1047824", procedure:"Crown Delivery", discipline:"Prosthodontics",
+      treatmentStart:"2026-01-15", expectedCompletion:"2026-04-01",
+      nextAppt:null, nextApptTime:"", treatmentComplete:false,
+      labStatus:"Received", labSentDate:"2026-02-20", labReceivedDate:"2026-03-15",
+      preAuth:"Submitted", preAuthSubmittedDate:"2026-02-01",
+      notes:"Lab received. Need to schedule delivery appointment urgently.",
+      isPrimaryProvider:true, patientLanguage:"Spanish",
+      handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+      visits:[
+        { date:"2026-01-15", procedure:"Crown Prep", notes:"Prep complete, impressions taken." },
+        { date:"2026-03-18", procedure:"Try-in", notes:"Crown fits well, minor adjustment needed." }
+      ]
+    },
+    {
+      chartNumber:"1047825", procedure:"Implant Stage 2", discipline:"Implant Dentistry",
+      treatmentStart:"2025-11-20", expectedCompletion:"2026-06-01",
+      nextAppt:"2026-04-05", nextApptTime:"10:30", treatmentComplete:false,
+      labStatus:"Sent", labSentDate:"2026-03-10", labReceivedDate:"",
+      preAuth:"Approved", preAuthSubmittedDate:"2025-12-10",
+      notes:"Stage 1 osseointegration confirmed. Abutment placement scheduled.",
+      isPrimaryProvider:true, patientLanguage:"Mandarin",
+      handoffPartner:"Priya Patel", handoffPartnerYear:"D3",
+      handoffNotes:"Osseointegration confirmed. Next stage April 5.",
+      visits:[
+        { date:"2025-11-20", procedure:"Implant Placement", notes:"Stage 1 placed, healing abutment placed." },
+        { date:"2026-01-15", procedure:"Osseointegration Check", notes:"Good bone contact, proceeding to stage 2." },
+        { date:"2026-03-10", procedure:"Abutment Impression", notes:"Sent to lab for custom abutment." }
+      ]
+    },
+    {
+      chartNumber:"1047826", procedure:"Scaling & Root Planing", discipline:"Periodontics",
+      treatmentStart:"2026-02-01", expectedCompletion:"2026-05-01",
+      nextAppt:null, nextApptTime:"", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Denied", preAuthSubmittedDate:"2026-01-25",
+      notes:"Pre-auth denied. Need to resubmit with additional documentation from attending.",
+      isPrimaryProvider:true, patientLanguage:"Haitian Creole",
+      handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+      visits:[
+        { date:"2026-02-01", procedure:"Perio Exam", notes:"Full mouth probing complete. SRP treatment plan accepted." },
+        { date:"2026-03-05", procedure:"SRP - Upper Right", notes:"Quadrant 1 complete. Patient tolerated well." }
+      ]
+    },
+    {
+      chartNumber:"1047827", procedure:"Extraction - Impacted", discipline:"Oral & Maxillofacial Surgery",
+      treatmentStart:"2026-03-01", expectedCompletion:"2026-04-15",
+      nextAppt:"2026-04-01", nextApptTime:"14:00", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Approved", preAuthSubmittedDate:"2026-02-15",
+      notes:"Post-op healing well. Suture removal today.",
+      isPrimaryProvider:true, patientLanguage:"English",
+      handoffPartner:"Jordan Kim", handoffPartnerYear:"D3",
+      handoffNotes:"Suture removal April 1. Good case for D3 observation.",
+      visits:[
+        { date:"2026-03-01", procedure:"Consultation", notes:"CBCT reviewed with attending. Extraction approved." },
+        { date:"2026-03-15", procedure:"Extraction - Impacted Molar", notes:"Procedure complete. Sutures placed." },
+        { date:"2026-03-22", procedure:"Post-op Check", notes:"Healing well, mild swelling resolving." }
+      ]
+    },
+    {
+      chartNumber:"1047828", procedure:"Complete Denture", discipline:"Prosthodontics",
+      treatmentStart:"2026-01-20", expectedCompletion:"2026-05-15",
+      nextAppt:"2026-04-02", nextApptTime:"09:30", treatmentComplete:false,
+      labStatus:"Sent", labSentDate:"2026-03-12", labReceivedDate:"",
+      preAuth:"Approved", preAuthSubmittedDate:"2026-01-25",
+      notes:"Final impression sent to lab. Wax try-in appointment scheduled.",
+      isPrimaryProvider:true, patientLanguage:"Russian",
+      handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+      visits:[
+        { date:"2026-01-20", procedure:"Preliminary Impression", notes:"Initial records taken." },
+        { date:"2026-02-10", procedure:"Final Impression", notes:"Border molded, final impression complete." },
+        { date:"2026-03-12", procedure:"Jaw Relations", notes:"VDO established. Sent to lab for wax try-in." }
+      ]
+    },
+    {
+      chartNumber:"1047829", procedure:"Composite Restoration", discipline:"General Dentistry",
+      treatmentStart:"2026-03-25", expectedCompletion:"2026-04-10",
+      nextAppt:"2026-04-10", nextApptTime:"11:00", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Not Submitted", preAuthSubmittedDate:"",
+      notes:"Multiple composite restorations planned. First quadrant complete.",
+      isPrimaryProvider:true, patientLanguage:"English",
+      handoffPartner:"Marcus Reid", handoffPartnerYear:"D3",
+      handoffNotes:"Simple composites — good learning case for D3.",
+      visits:[
+        { date:"2026-03-25", procedure:"Composite - 3 surfaces", notes:"Upper right quadrant complete. Patient happy with result." }
+      ]
+    },
+    {
+      chartNumber:"1047830", procedure:"Orthodontic Retention", discipline:"Orthodontics",
+      treatmentStart:"2025-09-01", expectedCompletion:"2026-05-01",
+      nextAppt:"2026-04-01", nextApptTime:"15:00", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Not Submitted", preAuthSubmittedDate:"",
+      notes:"Retention phase. Monthly monitoring appointments ongoing.",
+      isPrimaryProvider:false, patientLanguage:"English",
+      handoffPartner:"Dr. Chen", handoffPartnerYear:"D4",
+      handoffNotes:"Monthly monitoring. Almost ready for debond.",
+      visits:[
+        { date:"2025-09-01", procedure:"Banding", notes:"Full banding complete." },
+        { date:"2025-11-15", procedure:"Adjustment", notes:"Wire change, good progress." },
+        { date:"2026-01-20", procedure:"Adjustment", notes:"Spaces closing well." },
+        { date:"2026-02-28", procedure:"Adjustment", notes:"Almost ready for debond." }
+      ]
+    }
+  ];
+
+  const demoRotations = [
+    { site:"Bellevue Hospital", type:"Hospital Dentistry", startDate:"2026-04-08", endDate:"2026-04-08", recurring:false, recurringDay:"", notes:"Dr. Patel supervising. Bring loupes and clinic coat.", color:"#6b21a8", time:"08:00" },
+    { site:"NYC Health + Hospitals — Woodhull", type:"Community Health", startDate:"2026-04-01", endDate:"2026-04-30", recurring:true, recurringDay:"tuesday", notes:"Every Tuesday in April. Ortho and general cases.", color:"#0891b2", time:"09:00" }
+  ];
+
+  const demoNotes = [
+    { title:"Pre-clinic checklist", body:"- Review patient charts\n- Check lab status\n- Confirm pre-auth\n- Bring loupes\n- Check attending schedule", category:"Clinical", pinned:true },
+    { title:"SRP technique notes", body:"Dr. Chen feedback: work on wrist angulation on posterior teeth. Use modified pen grasp on mandibular anteriors.", category:"Study", pinned:false },
+    { title:"Insurance resubmission — P-2026-004", body:"Pre-auth denied for SRP. Need to attach perio charting with 4mm+ pockets and radiographs. Resubmit through EDI by April 5.", category:"Patient", pinned:false }
+  ];
+
+  try {
+    // Clear existing data for this user
+    await pool.query('DELETE FROM patients WHERE user_id=$1', [uid]);
+    await pool.query('DELETE FROM rotations WHERE user_id=$1', [uid]);
+    await pool.query('DELETE FROM student_notes WHERE user_id=$1', [uid]);
+
+    const year = new Date().getFullYear();
+    const insertedPatients = [];
+
+    // Insert demo patients + visits
+    for (let i = 0; i < demoPatients.length; i++) {
+      const p = demoPatients[i];
+      const id = `PT-${uid36()}`;
+      const alias = `P-${year}-${String(i + 1).padStart(3, '0')}`;
+      const lastVisit = p.visits.length > 0 ? p.visits[p.visits.length - 1].date : p.treatmentStart;
+
+      await pool.query(`
+        INSERT INTO patients (id,user_id,alias,chart_number,procedure,discipline,last_visit,treatment_start,
+          expected_completion,next_appt,next_appt_time,treatment_complete,lab_status,lab_sent_date,
+          lab_received_date,pre_auth,pre_auth_submitted_date,notes,handoff_partner,handoff_partner_year,
+          handoff_notes,patient_language,is_primary_provider,shared_with_d3)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+        [id, uid, alias, p.chartNumber, p.procedure, p.discipline, lastVisit,
+         p.treatmentStart, p.expectedCompletion, p.nextAppt||null, p.nextApptTime||'',
+         p.treatmentComplete, p.labStatus, p.labSentDate||'', p.labReceivedDate||'',
+         p.preAuth, p.preAuthSubmittedDate||'', p.notes, p.handoffPartner||'',
+         p.handoffPartnerYear||'D3', p.handoffNotes||'', p.patientLanguage||'English',
+         p.isPrimaryProvider !== false, false]
+      );
+
+      const visitRows = [];
+      for (const v of p.visits) {
+        const { rows } = await pool.query(
+          'INSERT INTO visit_logs (patient_id,visit_date,procedure,notes,cdt_code) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+          [id, v.date, v.procedure, v.notes||'', '']
+        );
+        visitRows.push({ id: rows[0].id, date: rows[0].visit_date, procedure: rows[0].procedure, notes: rows[0].notes, cdtCode: rows[0].cdt_code });
+      }
+
+      insertedPatients.push({
+        id, alias, chartNumber: p.chartNumber, procedure: p.procedure, discipline: p.discipline,
+        lastVisit, treatmentStart: p.treatmentStart, expectedCompletion: p.expectedCompletion,
+        nextAppt: p.nextAppt||null, nextApptTime: p.nextApptTime||'', treatmentComplete: p.treatmentComplete,
+        labStatus: p.labStatus, labSentDate: p.labSentDate||'', labReceivedDate: p.labReceivedDate||'',
+        preAuth: p.preAuth, preAuthSubmittedDate: p.preAuthSubmittedDate||'', notes: p.notes,
+        handoffPartner: p.handoffPartner||'', handoffPartnerYear: p.handoffPartnerYear||'D3',
+        handoffNotes: p.handoffNotes||'', patientLanguage: p.patientLanguage||'English',
+        isPrimaryProvider: p.isPrimaryProvider !== false, sharedWithD3: false,
+        visitLog: visitRows,
+      });
+    }
+
+    // Insert demo rotations
+    const insertedRotations = [];
+    for (const r of demoRotations) {
+      const id = `ROT-${uid36()}`;
+      await pool.query(
+        'INSERT INTO rotations (id,user_id,site,type,start_date,end_date,recurring,recurring_day,notes,color,time) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [id, uid, r.site, r.type, r.startDate, r.endDate, r.recurring, r.recurringDay||'', r.notes||'', r.color||'#6b21a8', r.time||'08:00']
+      );
+      insertedRotations.push({ id, site: r.site, type: r.type, startDate: r.startDate, endDate: r.endDate, recurring: r.recurring, recurringDay: r.recurringDay||'', notes: r.notes||'', color: r.color||'#6b21a8', time: r.time||'08:00' });
+    }
+
+    // Insert demo notes
+    const insertedNotes = [];
+    for (const n of demoNotes) {
+      const id = `NOTE-${uid36()}`;
+      const now = new Date().toISOString();
+      await pool.query(
+        'INSERT INTO student_notes (id,user_id,title,body,category,pinned,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        [id, uid, n.title, n.body, n.category||'General', n.pinned||false, now, now]
+      );
+      insertedNotes.push({ id, title: n.title, body: n.body, category: n.category||'General', pinned: n.pinned||false, createdAt: now, updatedAt: now });
+    }
+
+    console.log(`Demo seed: ${insertedPatients.length} patients, ${insertedRotations.length} rotations, ${insertedNotes.length} notes for user ${uid}`);
+    res.json({ patients: insertedPatients, rotations: insertedRotations, notes: insertedNotes });
+  } catch (err) {
+    console.error('Demo seed error:', err.message);
+    res.status(500).json({ error: 'Failed to seed demo data' });
+  }
+});
+
 // ── User Settings ─────────────────────────────────────────────────────────────
 
 app.get('/api/settings', requireAuth, async (req, res) => {

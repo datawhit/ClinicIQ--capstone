@@ -1,0 +1,134 @@
+const demoPatients = [
+  {
+    chartNumber:"1047823", procedure:"Root Canal - Molar", discipline:"Endodontics",
+    treatmentStart:"2026-01-15", expectedCompletion:"2026-04-15",
+    nextAppt:"2026-04-02", nextApptTime:"09:00", treatmentComplete:false,
+    labStatus:"None", labSentDate:"", labReceivedDate:"",
+    preAuth:"Approved", preAuthSubmittedDate:"2026-01-20",
+    notes:"Patient tolerated well. Final restoration pending. Prefers morning appointments.",
+    isPrimaryProvider:true, patientLanguage:"English",
+    handoffPartner:"Marcus Reid", handoffPartnerYear:"D3",
+    handoffNotes:"Crown placement still pending. Patient prefers morning appointments.",
+    visits:[
+      { date:"2026-01-15", procedure:"Initial Exam", notes:"Treatment plan accepted." },
+      { date:"2026-02-10", procedure:"Root Canal - Molar", notes:"First appointment, access opened." },
+      { date:"2026-03-20", procedure:"Root Canal - Molar", notes:"Obturation complete. Sent for crown prep." }
+    ]
+  },
+  {
+    chartNumber:"1047824", procedure:"Crown Delivery", discipline:"Prosthodontics",
+    treatmentStart:"2026-01-15", expectedCompletion:"2026-04-01",
+    nextAppt:null, nextApptTime:"", treatmentComplete:false,
+    labStatus:"Received", labSentDate:"2026-02-20", labReceivedDate:"2026-03-15",
+    preAuth:"Submitted", preAuthSubmittedDate:"2026-02-01",
+    notes:"Lab received. Need to schedule delivery appointment urgently.",
+    isPrimaryProvider:true, patientLanguage:"Spanish",
+    handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+    visits:[
+      { date:"2026-01-15", procedure:"Crown Prep", notes:"Prep complete, impressions taken." },
+      { date:"2026-03-18", procedure:"Try-in", notes:"Crown fits well, minor adjustment needed." }
+    ]
+  },
+  {
+    chartNumber:"1047825", procedure:"Implant Stage 2", discipline:"Implant Dentistry",
+    treatmentStart:"2025-11-20", expectedCompletion:"2026-06-01",
+    nextAppt:"2026-04-05", nextApptTime:"10:30", treatmentComplete:false,
+    labStatus:"Sent", labSentDate:"2026-03-10", labReceivedDate:"",
+    preAuth:"Approved", preAuthSubmittedDate:"2025-12-10",
+    notes:"Stage 1 osseointegration confirmed. Abutment placement scheduled.",
+    isPrimaryProvider:true, patientLanguage:"Mandarin",
+    handoffPartner:"Priya Patel", handoffPartnerYear:"D3",
+    handoffNotes:"Osseointegration confirmed. Next stage April 5.",
+    visits:[
+      { date:"2025-11-20", procedure:"Implant Placement", notes:"Stage 1 placed, healing abutment placed." },
+      { date:"2026-01-15", procedure:"Osseointegration Check", notes:"Good bone contact, proceeding to stage 2." },
+      { date:"2026-03-10", procedure:"Abutment Impression", notes:"Sent to lab for custom abutment." }
+    ]
+  },
+  {
+    chartNumber:"1047826", procedure:"Scaling & Root Planing", discipline:"Periodontics",
+    treatmentStart:"2026-02-01", expectedCompletion:"2026-05-01",
+    nextAppt:null, nextApptTime:"", treatmentComplete:false,
+    labStatus:"None", labSentDate:"", labReceivedDate:"",
+    preAuth:"Denied", preAuthSubmittedDate:"2026-01-25",
+    notes:"Pre-auth denied. Need to resubmit with additional documentation from attending.",
+    isPrimaryProvider:true, patientLanguage:"Haitian Creole",
+    handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+    visits:[
+      { date:"2026-02-01", procedure:"Perio Exam", notes:"Full mouth probing complete. SRP treatment plan accepted." },
+      { date:"2026-03-05", procedure:"SRP - Upper Right", notes:"Quadrant 1 complete. Patient tolerated well." }
+    ]
+  },
+  {
+    chartNumber:"1047827", procedure:"Extraction - Impacted", discipline:"Oral & Maxillofacial Surgery",
+    treatmentStart:"2026-03-01", expectedCompletion:"2026-04-15",
+    nextAppt:"2026-04-01", nextApptTime:"14:00", treatmentComplete:false,
+    labStatus:"None", labSentDate:"", labReceivedDate:"",
+    preAuth:"Approved", preAuthSubmittedDate:"2026-02-15",
+    notes:"Post-op healing well. Suture removal today.",
+    isPrimaryProvider:true, patientLanguage:"English",
+    handoffPartner:"Jordan Kim", handoffPartnerYear:"D3",
+    handoffNotes:"Suture removal April 1. Good case for D3 observation.",
+    visits:[
+      { date:"2026-03-01", procedure:"Consultation", notes:"CBCT reviewed with attending. Extraction approved." },
+      { date:"2026-03-15", procedure:"Extraction - Impacted Molar", notes:"Procedure complete. Sutures placed." },
+      { date:"2026-03-22", procedure:"Post-op Check", notes:"Healing well, mild swelling resolving." }
+    ]
+  },
+  {
+    chartNumber:"1047828", procedure:"Complete Denture", discipline:"Prosthodontics",
+    treatmentStart:"2026-01-20", expectedCompletion:"2026-05-15",
+    nextAppt:"2026-04-02", nextApptTime:"09:30", treatmentComplete:false,
+    labStatus:"Sent", labSentDate:"2026-03-12", labReceivedDate:"",
+    preAuth:"Approved", preAuthSubmittedDate:"2026-01-25",
+    notes:"Final impression sent to lab. Wax try-in appointment scheduled.",
+    isPrimaryProvider:true, patientLanguage:"Russian",
+    handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+    visits:[
+      { date:"2026-01-20", procedure:"Preliminary Impression", notes:"Initial records taken." },
+      { date:"2026-02-10", procedure:"Final Impression", notes:"Border molded, final impression complete." },
+      { date:"2026-03-12", procedure:"Jaw Relations", notes:"VDO established. Sent to lab for wax try-in." }
+    ]
+  },
+  {
+    chartNumber:"1047829", procedure:"Composite Restoration", discipline:"General Dentistry",
+    treatmentStart:"2026-03-25", expectedCompletion:"2026-04-10",
+    nextAppt:"2026-04-10", nextApptTime:"11:00", treatmentComplete:false,
+    labStatus:"None", labSentDate:"", labReceivedDate:"",
+    preAuth:"Not Submitted", preAuthSubmittedDate:"",
+    notes:"Multiple composite restorations planned. First quadrant complete.",
+    isPrimaryProvider:true, patientLanguage:"English",
+    handoffPartner:"Marcus Reid", handoffPartnerYear:"D3",
+    handoffNotes:"Simple composites — good learning case for D3.",
+    visits:[
+      { date:"2026-03-25", procedure:"Composite - 3 surfaces", notes:"Upper right quadrant complete. Patient happy with result." }
+    ]
+  },
+  {
+    chartNumber:"1047830", procedure:"Orthodontic Retention", discipline:"Orthodontics",
+    treatmentStart:"2025-09-01", expectedCompletion:"2026-05-01",
+    nextAppt:"2026-04-01", nextApptTime:"15:00", treatmentComplete:false,
+    labStatus:"None", labSentDate:"", labReceivedDate:"",
+    preAuth:"Not Submitted", preAuthSubmittedDate:"",
+    notes:"Retention phase. Monthly monitoring appointments ongoing.",
+    isPrimaryProvider:false, patientLanguage:"English",
+    handoffPartner:"Dr. Chen", handoffPartnerYear:"D4", handoffNotes:"Monthly monitoring. Almost ready for debond.",
+    visits:[
+      { date:"2025-09-01", procedure:"Banding", notes:"Full banding complete." },
+      { date:"2025-11-15", procedure:"Adjustment", notes:"Wire change, good progress." },
+      { date:"2026-01-20", procedure:"Adjustment", notes:"Spaces closing well." },
+      { date:"2026-02-28", procedure:"Adjustment", notes:"Almost ready for debond." }
+    ]
+  }
+];
+
+const demoRotations = [
+  { site:"Bellevue Hospital", type:"Hospital Dentistry", startDate:"2026-04-08", endDate:"2026-04-08", recurring:false, recurringDay:"", notes:"Dr. Patel supervising. Bring loupes and clinic coat.", time:"08:00" },
+  { site:"NYC Health + Hospitals — Woodhull", type:"Community Health", startDate:"2026-04-01", endDate:"2026-04-30", recurring:true, recurringDay:"tuesday", notes:"Every Tuesday in April. Ortho and general cases.", time:"09:00" }
+];
+
+const demoNotes = [
+  { title:"Pre-clinic checklist", body:"- Review patient charts\n- Check lab status\n- Confirm pre-auth\n- Bring loupes\n- Check attending schedule", category:"Clinical", pinned:true },
+  { title:"SRP technique notes", body:"Dr. Chen feedback: work on wrist angulation on posterior teeth. Use modified pen grasp on mandibular anteriors.", category:"Study", pinned:false },
+  { title:"Insurance resubmission — P-2026-004", body:"Pre-auth denied for SRP. Need to attach perio charting with 4mm+ pockets and radiographs. Resubmit through EDI by April 5.", category:"Patient", pinned:false }
+];

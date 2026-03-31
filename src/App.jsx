@@ -450,6 +450,7 @@ export default function App() {
   const [tab, setTab] = useState("roster");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [demoSeeding, setDemoSeeding] = useState(false);
   const [showPairedPanel, setShowPairedPanel] = useState(false);
   const [pairedViewingAs, setPairedViewingAs] = useState("me");
   const [showUrgentPanel, setShowUrgentPanel] = useState(false);
@@ -595,6 +596,24 @@ export default function App() {
     } catch (err) {
       console.error("Add patient failed:", err);
       setAddPatientError("Connection error. Please try again.");
+    }
+  };
+
+  const loadDemoData = async () => {
+    setDemoSeeding(true);
+    try {
+      const res = await fetch("/api/demo/seed", { method:"POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setPatients(data.patients);
+        setRotations(data.rotations);
+        setNotes(data.notes);
+        setShowSettings(false);
+      }
+    } catch (err) {
+      console.error("Demo seed failed:", err);
+    } finally {
+      setDemoSeeding(false);
     }
   };
 
@@ -2820,6 +2839,19 @@ RESPONSE RULES:
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* ── Demo Data ── */}
+              <div style={{ background:"#fef9c3",borderRadius:14,padding:"16px 18px",border:"1px solid #fde047" }}>
+                <div style={{ fontSize:11,fontWeight:700,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10 }}>Demo Data</div>
+                <div style={{ fontSize:12,color:"#78350f",marginBottom:12,lineHeight:1.5 }}>
+                  Load 8 sample patients across all disciplines — complete with visit history, lab status, pre-auth data, and paired providers. Also loads 2 rotations and 3 notebook entries.<br/>
+                  <strong style={{ color:"#b45309" }}>⚠ This will replace all your current patients, rotations, and notes.</strong>
+                </div>
+                <button className="action-btn" onClick={loadDemoData} disabled={demoSeeding}
+                  style={{ background:"#92400e",color:"white",fontSize:13,width:"100%" }}>
+                  {demoSeeding ? "Loading demo data…" : "🎓 Load Demo Caseload"}
+                </button>
               </div>
 
               {/* ── Appearance ── */}
