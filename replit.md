@@ -78,6 +78,7 @@ Vite-based React application for NYU College of Dentistry patient tracking.
 - **Post-grad year options** — login and settings year selector includes GPR, OMFS, Periodontics, Endodontics, Prosthodontics, Orthodontics, Pediatric Dentistry Residents; AI prompt treats residents as clinical peers
 - **Partner Quick Notes** — chat-style message thread in Paired Provider section; teal bubbles for self, gray for partner; sent notes saved to patient record
 - **Changelog audit log** — `logChange` fires on patient add/delete, visit log/delete, note delete, appointment removal, rotation removal, treatment complete toggle, preAuth/lab status changes; Settings shows last 10 entries with "View all" expansion
+- **Predictive Nudge System** — Treatment Phase selector (0–V) with phase descriptions and recall-day guidance in patient detail; Specialty Referral tracking (type + status + referral date); Faculty Name field in Log Visit modal + shown in visit timeline; Graduation Transfer modal for D4 students when marking treatment complete (log transfer to resident/faculty, stored as `transferredTo`/`transferDate`); `calculateUrgency` integrates phase/specialty overdue nudges; Today tab shows "🔮 Predictive nudges" section for overdue phase/specialty patients; Predictive next appointment (`getPredictedNextAppt`) shown in Treatment Phase card
 
 ## Theme System
 - `THEMES` constant — 6 presets, each overrides: purple, purpleDark, purpleDeep, purpleLight, purpleMid, accent, lavender

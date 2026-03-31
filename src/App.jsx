@@ -242,6 +242,129 @@ const DISCIPLINE_AVATAR = {
 const LAB_STATUSES = ["None","Pending","Sent","Received"];
 const PREAUTH_STATUSES = ["Not Submitted","Submitted","Approved","Denied"];
 
+// ── Treatment Phase Framework ──────────────────────────────────────────────────
+const TREATMENT_PHASES = {
+  "0": { label:"Phase 0 – Assessment",        short:"Assessment",   color:"#6366f1", bg:"#eef2ff", followUpDays:7,   description:"Comprehensive exam, X-rays, medical/dental history review. Usually 45–60 min." },
+  "I": { label:"Phase I – Acute Care",         short:"Acute Care",   color:"#dc2626", bg:"#fee2e2", followUpDays:14,  description:"Pain relief, emergency extractions, temporary fillings. Goal: stabilize within 0–2 weeks." },
+  "II":{ label:"Phase II – Disease Control",   short:"Disease Ctrl", color:"#b45309", bg:"#fef3c7", followUpDays:28,  description:"Scaling & root planing, caries removal, oral hygiene education. Spans 2–4 weeks." },
+  "III":{ label:"Phase III – Re-evaluation",   short:"Re-eval",      color:"#0891b2", bg:"#e0f2fe", followUpDays:35,  description:"Reassess healing after Phase II. 4–6 weeks post-disease control. Confirm stability before restorative work." },
+  "IV": { label:"Phase IV – Restorative",      short:"Restorative",  color:"#7c3aed", bg:"#f5f3ff", followUpDays:90,  description:"Final restorations, crowns, bridges, implants, orthodontics. 2–3+ months depending on complexity." },
+  "V":  { label:"Phase V – Maintenance",       short:"Maintenance",  color:"#059669", bg:"#d1fae5", followUpDays:120, description:"Regular recall, cleanings, monitoring. Every 3–6 months based on patient risk." },
+};
+
+const PHASE_KEYS = ["0","I","II","III","IV","V"];
+
+const SPECIALTY_TYPES = [
+  "Endodontics","Oral Surgery","Periodontics","Prosthodontics",
+  "Orthodontics","Pediatric Dentistry","Oral Medicine","Implant Dentistry","Other"
+];
+const SPECIALTY_STATUSES = ["Pending","In Progress","Awaiting Report","Complete","Cancelled"];
+
+// ── Predictive Analytics ───────────────────────────────────────────────────────
+// Analyze visit history to find preferred day of week (0=Sun…6=Sat)
+const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+const getPredictedNextAppt = (patient) => {
+  const visits = patient.visitLog || [];
+  const phase = patient.treatmentPhase || "IV";
+  const phaseData = TREATMENT_PHASES[phase] || TREATMENT_PHASES["IV"];
+  const followUpDays = phaseData.followUpDays;
+
+  // Anchor date — last visit or today
+  const anchorStr = patient.lastVisit || new Date().toISOString().split("T")[0];
+  const anchor = new Date(anchorStr);
+
+  // Raw target date from phase timeline
+  const rawTarget = new Date(anchor.getTime() + followUpDays * 86400000);
+
+  // Find preferred weekday from visit history
+  let preferredDay = null;
+  let preferredDayName = null;
+  let patternReason = null;
+
+  if (visits.length >= 2) {
+    const dayCounts = {};
+    visits.forEach(v => {
+      const d = new Date(v.date).getDay();
+      dayCounts[d] = (dayCounts[d] || 0) + 1;
+    });
+    const sorted = Object.entries(dayCounts).sort((a,b) => b[1]-a[1]);
+    const topDay = parseInt(sorted[0][0]);
+    const topCount = sorted[0][1];
+    if (topCount / visits.length >= 0.4) { // 40%+ of visits on same day
+      preferredDay = topDay;
+      preferredDayName = WEEKDAY_NAMES[topDay];
+      patternReason = `Patient attended ${topCount} of ${visits.length} visits on ${preferredDayName}s`;
+    }
+  }
+
+  // Adjust rawTarget to preferred weekday
+  let targetDate = new Date(rawTarget);
+  if (preferredDay !== null) {
+    let dayDiff = (preferredDay - targetDate.getDay() + 7) % 7;
+    if (dayDiff === 0) dayDiff = 7; // push to next occurrence if same day
+    targetDate.setDate(targetDate.getDate() + dayDiff);
+  }
+
+  // Prefer morning time if history shows it
+  const apptTimes = visits.map(v => v.apptTime).filter(Boolean);
+  let preferredTime = null;
+  if (apptTimes.length >= 2) {
+    const morningCount = apptTimes.filter(t => parseInt(t) < 12).length;
+    if (morningCount / apptTimes.length >= 0.6) preferredTime = "9:00 AM";
+  }
+
+  // Build reason string
+  const phaseReason = `${phaseData.label} follow-up due in ${followUpDays} days`;
+  const reasons = [phaseReason];
+  if (patternReason) reasons.push(patternReason);
+  if (preferredTime) reasons.push(`Prefers morning appointments`);
+
+  const dateStr = targetDate.toISOString().split("T")[0];
+  const daysFromNow = Math.round((targetDate - new Date()) / 86400000);
+
+  return {
+    date: dateStr,
+    time: preferredTime,
+    preferredDay: preferredDayName,
+    daysFromNow,
+    reasons,
+    phaseLabel: phaseData.short,
+    followUpDays,
+    overdue: daysFromNow < 0,
+  };
+};
+
+// Phase-based follow-up nudge
+const getPhaseNudge = (patient) => {
+  if (patient.treatmentComplete) return null;
+  const phase = patient.treatmentPhase;
+  if (!phase) return null;
+  const phaseData = TREATMENT_PHASES[phase];
+  if (!phaseData) return null;
+  const lastVisit = patient.lastVisit;
+  if (!lastVisit) return null;
+  const daysSince = Math.floor((new Date() - new Date(lastVisit)) / 86400000);
+  const overdue = daysSince > phaseData.followUpDays;
+  const dueSoon = daysSince > phaseData.followUpDays * 0.8;
+  if (overdue) return { level:"overdue", label:`${phaseData.short} follow-up overdue (${daysSince}d)`, color:"#dc2626", bg:"#fee2e2" };
+  if (dueSoon)  return { level:"soon",   label:`${phaseData.short} follow-up due soon`,                 color:"#b45309", bg:"#fef3c7" };
+  return null;
+};
+
+// Specialty referral nudge
+const getSpecialtyNudge = (patient) => {
+  if (!patient.specialtyReferral) return null;
+  if (patient.specialtyStatus === "Complete" || patient.specialtyStatus === "Cancelled") return null;
+  if (!patient.specialtyReferralDate) return { level:"warn", label:"Specialty referral — no date set", color:"#7c3aed", bg:"#f5f3ff" };
+  const daysSince = Math.floor((new Date() - new Date(patient.specialtyReferralDate)) / 86400000);
+  if (daysSince > 30 && patient.specialtyStatus === "Pending")
+    return { level:"overdue", label:`Specialty pending ${daysSince}d — update status`, color:"#dc2626", bg:"#fee2e2" };
+  if (daysSince > 14)
+    return { level:"soon", label:`Specialty referral open — ${daysSince}d elapsed`, color:"#b45309", bg:"#fef3c7" };
+  return null;
+};
+
 const generateId = (patients) => `PT-${String(patients.length+1).padStart(3,"0")}`;
 
 const daysDiff = (dateStr) => {
@@ -263,6 +386,12 @@ const calculateUrgency = (patient) => {
   if (daysToCompletion !== null && daysToCompletion <= 30 && daysToCompletion >= 0) reasons.push(`Treatment due in ${daysToCompletion} days`);
   if (daysToCompletion !== null && daysToCompletion < 0) reasons.push("Treatment completion date passed");
   if (patient.preAuth === "Denied") reasons.push("Pre-auth denied");
+  // Phase-based nudge
+  const phaseNudge = getPhaseNudge(patient);
+  if (phaseNudge?.level === "overdue") reasons.push(phaseNudge.label);
+  // Specialty nudge
+  const specNudge = getSpecialtyNudge(patient);
+  if (specNudge?.level === "overdue") reasons.push(specNudge.label);
   if (reasons.length === 0) return null;
   return reasons;
 };
@@ -297,6 +426,12 @@ const emptyPatient = {
   handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
   patientLanguage:"English",
   isPrimaryProvider:true, sharedWithD3:false,
+  // Predictive Nudge & Phase
+  treatmentPhase:"IV",
+  // Specialty Referral
+  specialtyReferral:false, specialtyType:"", specialtyStatus:"Pending", specialtyReferralDate:"",
+  // Transfer
+  transferredTo:"", transferDate:"",
 };
 
 const SUPPORTED_LANGUAGES = [
@@ -462,7 +597,7 @@ export default function App() {
   const [newPatient, setNewPatient] = useState(emptyPatient);
   const [addPatientError, setAddPatientError] = useState("");
   const [showLogModal, setShowLogModal] = useState(null);
-  const [newVisit, setNewVisit] = useState({ date:"", procedure:"", notes:"", nextAppt:"", cdtCode:"" });
+  const [newVisit, setNewVisit] = useState({ date:"", procedure:"", notes:"", nextAppt:"", cdtCode:"", facultyName:"" });
   const [nlpInput, setNlpInput] = useState("");
   const [nlpLoading, setNlpLoading] = useState(false);
   const [nlpParsed, setNlpParsed] = useState(null);
@@ -518,6 +653,8 @@ export default function App() {
   const [changelog, setChangelog] = useState([]);
   const [changelogExpanded, setChangelogExpanded] = useState(false);
   const [partnerNoteInput, setPartnerNoteInput] = useState({});
+  const [showTransferModal, setShowTransferModal] = useState(null); // patient id
+  const [transferToName, setTransferToName] = useState("");
 
   // ── Theme ─────────────────────────────────────────────────────────────────────
   const T = { ...NYU, ...(THEMES[themePreset] || THEMES["nyu-purple"]) };
@@ -662,7 +799,7 @@ export default function App() {
         ));
       }
     } catch (err) { console.error("Log visit failed:", err); }
-    setNewVisit({ date:"", procedure:"", notes:"", nextAppt:"", cdtCode:"" });
+    setNewVisit({ date:"", procedure:"", notes:"", nextAppt:"", cdtCode:"", facultyName:"" });
     setNlpInput(""); setNlpParsed(null); setNlpError("");
     setShowLogModal(null);
   };
@@ -1343,7 +1480,7 @@ RESPONSE RULES:
                             <div style={{ fontSize:12, color:NYU.gray400 }}>{p.procedure||"No procedure"} · {p.nextApptTime||"Time TBD"}</div>
                             {badge&&<span style={{ fontSize:10, fontWeight:600, color:badge.color, background:badge.bg, borderRadius:99, padding:"2px 8px", display:"inline-block", marginTop:4 }}>{badge.label}</span>}
                           </div>
-                          <button className="action-btn" onClick={()=>{ setDetailPatient(p.id); setShowLogModal(p.id); setNewVisit({ date:todayStr, procedure:"", notes:"", nextAppt:"", cdtCode:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); }} style={{ background:"#0d9488", color:"white", fontSize:12, padding:"7px 14px", whiteSpace:"nowrap", flexShrink:0 }}>Log Visit</button>
+                          <button className="action-btn" onClick={()=>{ setDetailPatient(p.id); setShowLogModal(p.id); setNewVisit({ date:todayStr, procedure:"", notes:"", nextAppt:"", cdtCode:"", facultyName:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); }} style={{ background:"#0d9488", color:"white", fontSize:12, padding:"7px 14px", whiteSpace:"nowrap", flexShrink:0 }}>Log Visit</button>
                         </div>
                       );
                     })}
@@ -1371,6 +1508,37 @@ RESPONSE RULES:
                     </div>
                   </>
                 )}
+                {/* Predictive Nudges */}
+                {(()=>{
+                  const phaseNudges = patients.filter(p=>!p.treatmentComplete&&getPhaseNudge(p)?.level==="overdue");
+                  const specNudges = patients.filter(p=>!p.treatmentComplete&&getSpecialtyNudge(p)?.level==="overdue");
+                  const allNudges = [...new Map([...phaseNudges,...specNudges].map(p=>[p.id,p])).values()];
+                  if(!allNudges.length) return null;
+                  return (
+                    <div style={{ marginTop:16 }}>
+                      <div style={{ fontWeight:700,fontSize:14,color:NYU.gray900,marginBottom:10 }}>🔮 Predictive nudges</div>
+                      <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                        {allNudges.slice(0,4).map(p=>{
+                          const pn=getPhaseNudge(p);
+                          const sn=getSpecialtyNudge(p);
+                          const msg=pn?.level==="overdue"?pn.label:sn?.label;
+                          const ava=DISCIPLINE_AVATAR[p.discipline]||{ bg:T.lavender, color:T.purple, initial:"??" };
+                          return (
+                            <div key={p.id} onClick={()=>setDetailPatient(p.id)} style={{ background:"white",borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,border:"1px solid #e9d5ff",cursor:"pointer" }}>
+                              <div style={{ width:38,height:38,borderRadius:11,background:ava.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                                <span style={{ fontSize:11,fontWeight:700,color:ava.color }}>{ava.initial}</span>
+                              </div>
+                              <div style={{ flex:1,minWidth:0 }}>
+                                <div style={{ fontWeight:600,fontSize:14,color:NYU.gray900 }}>{p.alias}</div>
+                                <div style={{ fontSize:12,color:"#7c3aed" }}>{msg}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
@@ -2174,6 +2342,7 @@ RESPONSE RULES:
                   </div>
                   <div><label style={labelStyle}>Next Appointment</label><input type="date" style={inputStyle} value={newVisit.nextAppt} onChange={e=>setNewVisit(v=>({...v,nextAppt:e.target.value}))}/></div>
                   <div><label style={labelStyle}>Visit Notes</label><textarea rows={2} style={{ ...inputStyle,resize:"vertical" }} placeholder="Optional notes..." value={newVisit.notes} onChange={e=>setNewVisit(v=>({...v,notes:e.target.value}))}/></div>
+                  <div><label style={labelStyle}>Faculty Name <span style={{ fontWeight:400,textTransform:"none",letterSpacing:0 }}>(supervising attending)</span></label><input style={inputStyle} placeholder="e.g. Dr. Chen" value={newVisit.facultyName||""} onChange={e=>setNewVisit(v=>({...v,facultyName:e.target.value}))}/></div>
                 </div>
               </div>
               <div style={{ display:"flex",gap:10 }}>
@@ -2201,7 +2370,8 @@ RESPONSE RULES:
             <div style={{ background:"white",borderBottom:`1px solid ${NYU.gray100}`,padding:"0 20px",height:56,display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:10 }}>
               <button onClick={()=>{ setDetailPatient(null); setSelectedVisit(null); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:22,color:NYU.gray600 }}>←</button>
               <span style={{ fontWeight:600,fontSize:16,color:NYU.gray900,flex:1 }}>Patient Detail</span>
-              <button className="action-btn" onClick={()=>{ setShowLogModal(patient.id); setNewVisit({ date:"",procedure:"",notes:"",nextAppt:"",cdtCode:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); }} style={{ background:T.purple,color:"white",fontSize:12,padding:"7px 16px" }}>+ Log Visit</button>
+              <button className="action-btn" onClick={()=>{ setShowLogModal(patient.id); setNewVisit({ date:"",procedure:"",notes:"",nextAppt:"",cdtCode:"",facultyName:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); }} style={{ background:T.purple,color:"white",fontSize:12,padding:"7px 16px" }}>+ Log Visit</button>
+
             </div>
 
             <div style={{ maxWidth:1100,margin:"0 auto",padding:"28px 32px 80px" }}>
@@ -2331,6 +2501,71 @@ RESPONSE RULES:
                 );
               })()}
 
+              {/* Treatment Phase */}
+              {(()=>{
+                const phaseNudge = getPhaseNudge(patient);
+                const predAppt = getPredictedNextAppt(patient);
+                return (
+                  <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
+                    <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+                      <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Treatment Phase</div>
+                      {phaseNudge&&<span style={{ fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:99,background:phaseNudge.level==="overdue"?"#fee2e2":phaseNudge.level==="due"?"#fef9c3":"#dcfce7",color:phaseNudge.level==="overdue"?NYU.red:phaseNudge.level==="due"?"#92400e":"#15803d" }}>{phaseNudge.label}</span>}
+                    </div>
+                    <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:12 }}>
+                      {Object.entries(TREATMENT_PHASES).map(([key,ph])=>{
+                        const active = (patient.treatmentPhase||"IV")===key;
+                        return <button key={key} className="pill-btn" onClick={()=>updateField(patient.id,"treatmentPhase",key)} style={{ background:active?T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11,fontWeight:600 }}>{key}: {ph.label}</button>;
+                      })}
+                    </div>
+                    {patient.treatmentPhase&&TREATMENT_PHASES[patient.treatmentPhase]&&(
+                      <div style={{ fontSize:12,color:NYU.gray500,background:NYU.gray50,borderRadius:8,padding:"8px 12px",lineHeight:1.5 }}>
+                        {TREATMENT_PHASES[patient.treatmentPhase].description}
+                        {TREATMENT_PHASES[patient.treatmentPhase].followUpDays&&<span style={{ marginLeft:6,fontSize:11,fontWeight:600,color:T.purple }}>· Recall every {TREATMENT_PHASES[patient.treatmentPhase].followUpDays} days</span>}
+                      </div>
+                    )}
+                    {predAppt&&(
+                      <div style={{ marginTop:12,fontSize:12,color:NYU.gray600,display:"flex",alignItems:"center",gap:6 }}>
+                        <span style={{ fontSize:14 }}>🔮</span>
+                        <span><b>Predicted next visit:</b> {predAppt.date} ({predAppt.day}) — based on {predAppt.sampleSize} prior visits</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Specialty Referral */}
+              {(()=>{
+                const specNudge = getSpecialtyNudge(patient);
+                return (
+                  <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
+                    <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+                      <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Specialty Referral</div>
+                      {specNudge&&<span style={{ fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:99,background:specNudge.level==="overdue"?"#fee2e2":specNudge.level==="due"?"#fef9c3":"#dcfce7",color:specNudge.level==="overdue"?NYU.red:specNudge.level==="due"?"#92400e":"#15803d" }}>{specNudge.label}</span>}
+                    </div>
+                    <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:10 }}>
+                      {["None",...SPECIALTY_TYPES].map(t=>{
+                        const active=(patient.specialtyType||"None")===t;
+                        return <button key={t} className="pill-btn" onClick={()=>updateField(patient.id,"specialtyType",t==="None"?null:t)} style={{ background:active?T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11 }}>{t}</button>;
+                      })}
+                    </div>
+                    {patient.specialtyType&&patient.specialtyType!=="None"&&(
+                      <div style={{ display:"flex",flexDirection:"column",gap:10,marginTop:8 }}>
+                        <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                          {SPECIALTY_STATUSES.map(s=>{
+                            const active=(patient.specialtyStatus||"Pending")===s;
+                            const colors={Pending:"#f59e0b",Scheduled:"#3b82f6","Awaiting Report":"#8b5cf6",Completed:"#10b981"};
+                            return <button key={s} className="pill-btn" onClick={()=>updateField(patient.id,"specialtyStatus",s)} style={{ background:active?colors[s]||T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11 }}>{s}</button>;
+                          })}
+                        </div>
+                        <div style={{ display:"flex",gap:10 }}>
+                          <div style={{ flex:1 }}><label style={{ ...labelStyle,fontSize:10,marginBottom:4 }}>Referral Date</label><input type="date" style={{ ...inputStyle,fontSize:12,padding:"6px 10px" }} value={patient.specialtyReferralDate||""} onChange={e=>updateField(patient.id,"specialtyReferralDate",e.target.value)}/></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Lab & Pre-Auth with date fields + nudge indicators */}
               <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
                 <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900,marginBottom:14 }}>Lab & Pre-Auth</div>
@@ -2421,7 +2656,8 @@ RESPONSE RULES:
                                 <div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>Procedure</div><div style={{ fontSize:13,fontWeight:500,color:NYU.gray900 }}>{v.procedure}</div></div>
                                 {v.cdtCode&&<div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>CDT Code</div><div style={{ fontSize:13,fontWeight:500,color:T.purple }}>{v.cdtCode}</div></div>}
                               </div>
-                              {v.notes&&<div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>Clinical Notes</div><div style={{ fontSize:13,color:NYU.gray600,lineHeight:1.5,background:"white",borderRadius:8,padding:"8px 10px" }}>{v.notes}</div></div>}
+                              {v.notes&&<div style={{ marginBottom:8 }}><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>Clinical Notes</div><div style={{ fontSize:13,color:NYU.gray600,lineHeight:1.5,background:"white",borderRadius:8,padding:"8px 10px" }}>{v.notes}</div></div>}
+                              {v.facultyName&&<div style={{ marginBottom:8 }}><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>Supervising Faculty</div><div style={{ fontSize:13,fontWeight:600,color:T.purple }}>👨‍⚕️ {v.facultyName}</div></div>}
                               <div style={{ marginTop:8,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
                                 <div style={{ fontSize:11,color:T.purple,fontWeight:500 }}>Visit #{patient.visitLog.length-i} of {patient.visitLog.length}</div>
                                 <button onClick={e=>{ e.stopPropagation(); setConfirmDelete({ message:`Delete this visit (${v.procedure} on ${v.date})?`, onConfirm:async()=>{ const updated={...patient,visitLog:patient.visitLog.filter((_,vi)=>vi!==i)}; await fetch(`/api/patients/${patient.id}`,{ method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(updated) }); logChange({ action_type:"VISIT_DELETED",patient_alias:patient.alias,description:`Deleted visit for ${patient.alias}: ${v.procedure} on ${v.date}` }); setPatients(prev=>prev.map(p=>p.id===patient.id?updated:p)); setSelectedVisit(null); } }); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,color:NYU.red,fontFamily:"'Inter', sans-serif",fontWeight:500 }}>Delete visit</button>
@@ -2513,14 +2749,22 @@ RESPONSE RULES:
               </div>
 
               {/* Mark Complete */}
-              <div style={{ background:"white",borderRadius:16,padding:"16px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-                <div>
-                  <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Treatment Complete</div>
-                  <div style={{ fontSize:12,color:NYU.gray400,marginTop:2 }}>Mark when all treatment is finished</div>
+              <div style={{ background:"white",borderRadius:16,padding:"16px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                  <div>
+                    <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Treatment Complete</div>
+                    <div style={{ fontSize:12,color:NYU.gray400,marginTop:2 }}>Mark when all treatment is finished</div>
+                  </div>
+                  <div onClick={()=>{ const markingComplete=!patient.treatmentComplete; updateField(patient.id,"treatmentComplete",markingComplete); logChange({ action_type:"TREATMENT_COMPLETE",patient_alias:patient.alias,description:`Marked ${patient.alias} treatment ${markingComplete?"complete":"incomplete"}` }); if(markingComplete&&user?.year==="D4"){ setShowTransferModal(patient.id); setTransferToName(""); } }} style={{ width:48,height:26,borderRadius:99,background:patient.treatmentComplete?NYU.green:NYU.gray200,cursor:"pointer",transition:"all 0.2s",position:"relative",flexShrink:0 }}>
+                    <div style={{ position:"absolute",top:3,left:patient.treatmentComplete?24:3,width:20,height:20,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
+                  </div>
                 </div>
-                <div onClick={()=>{ updateField(patient.id,"treatmentComplete",!patient.treatmentComplete); logChange({ action_type:"TREATMENT_COMPLETE",patient_alias:patient.alias,description:`Marked ${patient.alias} treatment ${!patient.treatmentComplete?"complete":"incomplete"}` }); }} style={{ width:48,height:26,borderRadius:99,background:patient.treatmentComplete?NYU.green:NYU.gray200,cursor:"pointer",transition:"all 0.2s",position:"relative",flexShrink:0 }}>
-                  <div style={{ position:"absolute",top:3,left:patient.treatmentComplete?24:3,width:20,height:20,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
-                </div>
+                {patient.transferredTo&&(
+                  <div style={{ marginTop:12,fontSize:12,color:NYU.gray500,background:"#f3e8ff",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,alignItems:"center" }}>
+                    <span style={{ fontSize:14 }}>🎓</span>
+                    <span><b>Transferred to:</b> {patient.transferredTo}{patient.transferDate?` on ${patient.transferDate}`:""}</span>
+                  </div>
+                )}
               </div>
 
               {/* Delete Patient */}
@@ -2549,6 +2793,35 @@ RESPONSE RULES:
           </div>
         </>
       )}
+
+      {/* ── GRADUATION TRANSFER MODAL ── */}
+      {showTransferModal&&(()=>{
+        const pt=patients.find(p=>p.id===showTransferModal);
+        if(!pt) return null;
+        return (
+          <>
+            <div onClick={()=>setShowTransferModal(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:3100 }}/>
+            <div style={{ position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:3101,background:"white",borderRadius:20,padding:"28px 28px 24px",maxWidth:420,width:"92%",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}>
+              <div style={{ fontSize:28,marginBottom:10,textAlign:"center" }}>🎓</div>
+              <div style={{ fontWeight:700,fontSize:17,color:NYU.gray900,marginBottom:6,textAlign:"center" }}>Graduation Transfer</div>
+              <div style={{ fontSize:13,color:NYU.gray500,marginBottom:20,textAlign:"center",lineHeight:1.5 }}>You marked <b>{pt.alias}</b> treatment complete. As a D4, you can log a transfer to a resident or faculty for continued care.</div>
+              <div style={{ marginBottom:14 }}>
+                <label style={{ ...labelStyle,fontSize:11 }}>Transfer to (resident / faculty name) <span style={{ fontWeight:400,textTransform:"none" }}>— optional</span></label>
+                <input style={inputStyle} placeholder="e.g. Dr. Patel (GPR)" value={transferToName} onChange={e=>setTransferToName(e.target.value)}/>
+              </div>
+              <div style={{ display:"flex",gap:10 }}>
+                <button className="action-btn" onClick={()=>setShowTransferModal(null)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>Skip</button>
+                <button className="action-btn" onClick={()=>{
+                  if(transferToName.trim()) updateField(pt.id,"transferredTo",transferToName.trim());
+                  updateField(pt.id,"transferDate",new Date().toISOString().split("T")[0]);
+                  logChange({ action_type:"TREATMENT_COMPLETE",patient_alias:pt.alias,description:`D4 graduation transfer: ${pt.alias}${transferToName.trim()?` → ${transferToName.trim()}`:""}` });
+                  setShowTransferModal(null);
+                }} style={{ flex:1,background:T.purple,color:"white" }}>Log Transfer</button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── QUICK LOG FLOATING BUTTON ── */}
       <div style={{ position:"fixed",bottom:28,left:28,zIndex:2000 }}>
@@ -2666,7 +2939,7 @@ RESPONSE RULES:
                         const p = patients.find(pt=>pt.alias===alias);
                         if(!p) return null;
                         return (
-                          <button onClick={()=>{ setDetailPatient(p.id); if(type==="logvisit"){ setShowLogModal(p.id); setNewVisit({ date:"",procedure:"",notes:"",nextAppt:"",cdtCode:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); } }}
+                          <button onClick={()=>{ setDetailPatient(p.id); if(type==="logvisit"){ setShowLogModal(p.id); setNewVisit({ date:"",procedure:"",notes:"",nextAppt:"",cdtCode:"",facultyName:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); } }}
                             style={{ fontSize:11,fontWeight:600,color:T.purple,background:T.lavender,border:`1px solid ${NYU.gray200}`,borderRadius:99,padding:"5px 12px",cursor:"pointer",fontFamily:"'Inter', sans-serif",display:"flex",alignItems:"center",gap:5 }}>
                             {type==="logvisit"?"📝 Log visit for ":"👤 View "}{alias} →
                           </button>

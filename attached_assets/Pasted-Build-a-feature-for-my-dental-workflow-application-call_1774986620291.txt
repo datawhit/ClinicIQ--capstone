@@ -1,0 +1,183 @@
+Build a feature for my dental workflow application called the “Predictive Nudge & Follow-Up System.”
+
+The goal is to use predictive analytics and workflow logic to determine when a patient should ideally return for their next appointment, based on both historical behavior and clinical treatment progression.
+
+Core Feature Requirements
+
+1. Predictive Appointment Recommendation
+Create a predictive analytics engine that recommends a patient’s next appointment date and time using:
+- The patient’s historical scheduling behavior
+- The patient’s attendance patterns
+- The day/time they most often accept or complete appointments
+- The treatment that was most recently completed
+- The expected clinical follow-up timeline tied to the treatment phase
+
+Example:
+If a patient historically prefers Friday appointments around 9:00 AM, the system should detect that pattern and prioritize recommending Friday at 9:00 AM for future appointments.
+
+The model should recognize patterns such as:
+- Preferred weekday
+- Preferred time of day
+- Frequency of cancellations or reschedules
+- Time gaps between visits
+- Likelihood of returning within a recommended treatment window
+
+2. Treatment-Based Follow-Up Logic
+The predictive system should also determine when a patient needs a follow-up appointment based on the treatment completed and the expected dental treatment phase timeline.
+
+Use the following treatment phase framework:
+
+Phase 0: Assessment & Diagnosis
+- Description: Comprehensive examination, X-rays, and medical/dental history review
+- Timeline: Immediate, usually 45–60 minutes
+
+Phase I: Acute/Urgent Care
+- Description: Pain relief, emergency extractions, temporary fillings
+- Timeline: 0–2 weeks
+- Goal: Stabilize the patient and resolve immediate problems
+
+Phase II: Disease Control & Stabilization
+- Description: Scaling and root planing, caries removal, oral hygiene education
+- Timeline: 2–6 weeks
+- Initial therapy may span 2–4 weeks
+
+Phase III: Re-evaluation
+- Description: Reassess tissue response to periodontal therapy and healing
+- Timeline: 4–6 weeks after Phase II
+- Goal: Confirm periodontal stability before irreversible restorative treatment begins
+
+Phase IV: Definitive / Restorative Phase
+- Description: Final restorations, crowns, bridges, implants, orthodontics
+- Timeline: 2–3 months or longer depending on case complexity
+
+Phase V: Maintenance & Prevention
+- Description: Regular recall visits, cleanings, and monitoring
+- Timeline: Every 3–6 months based on patient need
+
+The system should generate follow-up recommendations based on these phases.
+Examples:
+- After scaling and root planing, recommend periodontal re-evaluation in 4–6 weeks
+- After urgent care, recommend short-term follow-up within 1–2 weeks if needed
+- After definitive restorative treatment, recommend appropriate restorative review or maintenance
+- For maintenance patients, recommend 3-month, 4-month, or 6-month recall intervals based on patient history and risk
+
+3. Compliance and Case Progression Rules
+The workflow should account for:
+- Case complexity
+- Patient compliance
+- Whether the patient completed disease control before moving into restorative treatment
+- Whether treatment progression should pause if the patient is non-compliant
+
+Example:
+If the patient fails disease control or oral hygiene improvement, the system should flag that treatment progression may need to stop before advancing to definitive restorative care.
+
+4. Nudge System
+Add an automated nudge system for both providers and scheduling staff.
+
+The system should generate nudges for:
+- Patients overdue for follow-up
+- Patients due soon based on phase logic
+- Patients who historically delay care
+- Patients in specialty treatment with missing updates
+- Students/providers who need to document next steps
+- Cases approaching graduation transfer deadlines
+
+Nudges should appear as:
+- Dashboard alerts
+- Chart notifications
+- Task reminders
+- Suggested next action messages
+
+Examples:
+- “Patient is due for periodontal re-evaluation this week.”
+- “Patient historically books Friday mornings. Recommend next visit on Friday at 9:00 AM.”
+- “Patient referred to specialty care; specialty status update needed.”
+- “Student graduation approaching. Transfer roster assignment required.”
+
+5. Specialty Referral Tracking
+Add a workflow for patients referred to specialty treatment.
+
+Requirements:
+- A status field showing whether the patient is in specialty care
+- A field to input the referral date to specialty treatment
+- A shared-view option so postgraduate/specialty providers can view relevant patient workflow information
+- A status tracker for specialty progress
+- Alerts if a specialty referral is open without updated treatment documentation
+
+6. Faculty Documentation
+In the patient chart, include an input field to record the name of the faculty member who worked with the student on the day of the procedure.
+
+Requirements:
+- Faculty name field tied to each visit or procedure entry
+- Searchable in reporting
+- Included in workflow history and notes
+
+7. D4 Graduation Transfer Workflow
+Create a roster transfer feature for graduating D4 students.
+
+Requirements:
+- When treatment is marked as completed OR when the student’s graduation date is reached, a pop-up should appear
+- The pop-up should ask the student who they want to transfer the patient roster to
+- All relevant patient notes, workflow history, and care status should transfer to the assigned student/provider
+- The system should maintain an audit trail of the transfer
+- The transfer workflow should prevent patients from being left unassigned
+
+Example pop-up:
+“Graduation or treatment completion detected. Please assign this patient roster to the next student/provider.”
+
+8. Suggested Data Model
+Design tables or models for:
+- Patients
+- Appointments
+- Appointment history
+- Treatment phases
+- Procedures completed
+- Follow-up rules
+- Predictive recommendations
+- Nudges / alerts
+- Specialty referrals
+- Faculty documentation
+- Student roster transfers
+- Providers / students / postgraduate providers
+
+9. UI / Workflow Expectations
+Create a clean workflow inside the patient chart that includes:
+- Next recommended appointment
+- Reason for recommendation
+- Treatment phase status
+- Specialty referral status
+- Faculty name entry
+- Nudge alerts
+- Transfer roster action when applicable
+
+10. Analytics / Logic Expectations
+Use rules-based logic first, with a structure that can later support machine learning.
+The system should:
+- Analyze prior appointment patterns
+- Recommend the most likely accepted appointment slot
+- Estimate when follow-up care is clinically due
+- Flag overdue patients
+- Support explainable recommendations, not black-box results
+
+Examples of explainable recommendation text:
+- “Recommended because patient attended 4 of last 5 appointments on Fridays between 8:30 AM and 10:00 AM.”
+- “Recommended because Phase III re-evaluation is due 4 weeks after SRP completion.”
+- “Maintenance recall suggested at 3 months due to periodontal history and prior treatment pattern.”
+
+Technical Expectations
+- Build this as a modular feature that can be integrated into a larger dental workflow app
+- Use clean architecture
+- Make it scalable
+- Include sample seed data
+- Include comments in code
+- Include a simple dashboard or chart view for nudges and predicted next appointments
+- Prefer an MVP that works end-to-end, even if the predictive model begins with rules and weighted scoring instead of advanced machine learning
+
+Please generate:
+1. The app architecture
+2. The database schema
+3. Backend logic
+4. Frontend workflow
+5. Sample predictive rules
+6. Sample seed data
+7. A working MVP implementation
