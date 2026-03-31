@@ -83,6 +83,17 @@ export async function initDb() {
       custom_goals JSONB DEFAULT '[]',
       clinic_schedule JSONB DEFAULT '{}'
     );
+
+    CREATE TABLE IF NOT EXISTS changelog (
+      id TEXT PRIMARY KEY,
+      timestamp TIMESTAMPTZ DEFAULT NOW(),
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      user_name TEXT,
+      user_year TEXT,
+      action_type TEXT,
+      patient_alias TEXT,
+      description TEXT
+    );
   `);
   // Migrate existing tables — safe to run multiple times
   await pool.query(`

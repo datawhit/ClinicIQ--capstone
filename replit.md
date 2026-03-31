@@ -22,6 +22,7 @@ Vite-based React application for NYU College of Dentistry patient tracking.
 - `student_notes` — notebook entries (per-user)
 - `rotations` — external clinical rotations (per-user)
 - `user_settings` — graduation date, custom goals, clinic schedule (per-user, JSONB)
+- `changelog` — audit log entries (user_id, action_type, patient_alias, description, timestamp)
 - `session` — express-session storage (auto-created by connect-pg-simple)
 
 ## API Routes
@@ -38,6 +39,8 @@ Vite-based React application for NYU College of Dentistry patient tracking.
 - `GET/PUT /api/settings` — graduation date, goals, schedule
 - `POST /api/parse-note` — AI note parsing
 - `POST /api/parse` — AI chat proxy
+- `POST /api/changelog` — insert audit log entry
+- `GET /api/changelog` — fetch last 50 entries for current user
 
 ## Setup
 1. Node.js 22 with Vite + React
@@ -68,6 +71,13 @@ Vite-based React application for NYU College of Dentistry patient tracking.
 - D4 students can share patients with a D3 from the Add Patient modal (inline expand)
 - Graduation requirements count only primary-provider visits; breakdown shows "X as primary · Y as supporting"
 - AI assistant context includes `primary: yes/no` per patient line
+- **Today tab** (first tab) — greeting, stat chips (today's patients / pending items / requirements left), today's appointments sorted by time with Log Visit shortcut, and "Also needs attention" urgent patients section
+- **Quick Log floating button** (bottom-left teal circle) — compact modal with patient selector and AI-parsed note input; green success toast on submit
+- **Roster search bar** — filters patient list in real time by alias, chart number, or procedure
+- **ConfirmDelete system** — reusable confirm modal for delete patient, visit, note, appointment, rotation (all with "This cannot be undone" warning)
+- **Post-grad year options** — login and settings year selector includes GPR, OMFS, Periodontics, Endodontics, Prosthodontics, Orthodontics, Pediatric Dentistry Residents; AI prompt treats residents as clinical peers
+- **Partner Quick Notes** — chat-style message thread in Paired Provider section; teal bubbles for self, gray for partner; sent notes saved to patient record
+- **Changelog audit log** — `logChange` fires on patient add/delete, visit log/delete, note delete, appointment removal, rotation removal, treatment complete toggle, preAuth/lab status changes; Settings shows last 10 entries with "View all" expansion
 
 ## Theme System
 - `THEMES` constant — 6 presets, each overrides: purple, purpleDark, purpleDeep, purpleLight, purpleMid, accent, lavender

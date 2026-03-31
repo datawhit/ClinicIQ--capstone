@@ -624,6 +624,36 @@ app.post('/api/demo/seed', requireAuth, async (req, res) => {
   }
 });
 
+// ── Changelog ─────────────────────────────────────────────────────────────────
+
+function uid36() { return Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2,6).toUpperCase(); }
+
+app.post('/api/changelog', requireAuth, async (req, res) => {
+  try {
+    const { user_name, user_year, action_type, patient_alias, description } = req.body;
+    const id = `CL-${uid36()}`;
+    await pool.query(
+      'INSERT INTO changelog (id,user_id,user_name,user_year,action_type,patient_alias,description) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [id, req.session.userId, user_name||'', user_year||'', action_type||'', patient_alias||'', description||'']
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to log change' });
+  }
+});
+
+app.get('/api/changelog', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM changelog WHERE user_id=$1 ORDER BY timestamp DESC LIMIT 50',
+      [req.session.userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch changelog' });
+  }
+});
+
 // ── User Settings ─────────────────────────────────────────────────────────────
 
 app.get('/api/settings', requireAuth, async (req, res) => {

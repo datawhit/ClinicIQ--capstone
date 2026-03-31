@@ -38,12 +38,13 @@ const THEMES = {
 };
 
 const TAB_DEFS = {
+  today:        { label:"📋  Today" },
   roster:       { label:"👤  Patient Roster" },
   requirements: { label:"🎓  Graduation Goals" },
   calendar:     { label:"📅  Calendar" },
   notebook:     { label:"📓  Notebook" },
 };
-const DEFAULT_TAB_ORDER = ["roster","requirements","calendar","notebook"];
+const DEFAULT_TAB_ORDER = ["today","roster","requirements","calendar","notebook"];
 const STAT_DEFS = [
   { id:"total",    label:"Total Patients" },
   { id:"active",   label:"Active" },
@@ -507,6 +508,16 @@ export default function App() {
   const [themePreset, setThemePreset] = useState("nyu-purple");
   const [dashTabOrder, setDashTabOrder] = useState(DEFAULT_TAB_ORDER);
   const [visibleStats, setVisibleStats] = useState(STAT_DEFS.map(s=>s.id));
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [quickLogOpen, setQuickLogOpen] = useState(false);
+  const [quickLogPatientId, setQuickLogPatientId] = useState("");
+  const [quickLogNlp, setQuickLogNlp] = useState("");
+  const [quickLogLoading, setQuickLogLoading] = useState(false);
+  const [quickLogToast, setQuickLogToast] = useState("");
+  const [changelog, setChangelog] = useState([]);
+  const [changelogExpanded, setChangelogExpanded] = useState(false);
+  const [partnerNoteInput, setPartnerNoteInput] = useState({});
 
   // ── Theme ─────────────────────────────────────────────────────────────────────
   const T = { ...NYU, ...(THEMES[themePreset] || THEMES["nyu-purple"]) };
@@ -554,6 +565,12 @@ export default function App() {
     }).catch(() => setAppLoading(false));
   }, [loadUserData]);
 
+  useEffect(() => {
+    if (showSettings) {
+      fetch("/api/changelog").then(r=>r.ok?r.json():[]).then(d=>setChangelog(Array.isArray(d)?d:[])).catch(()=>{});
+    }
+  }, [showSettings]);
+
   // Debounced patient save — flushes after 800ms of no changes
   const schedulePatientSave = (patient) => {
     const id = patient.id;
@@ -590,6 +607,7 @@ export default function App() {
         return;
       }
       setPatients(prev => [...prev, data]);
+      logChange({ action_type:"PATIENT_ADDED", patient_alias:data.alias, description:`Added patient ${data.alias} (${data.discipline})` });
       setNewPatient(emptyPatient);
       setAddPatientError("");
       setShowAddModal(false);
@@ -617,6 +635,15 @@ export default function App() {
     }
   };
 
+  const logChange = (entry) => {
+    if (!user) return;
+    fetch("/api/changelog", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ user_name:user.name, user_year:user.year, ...entry })
+    }).catch(()=>{});
+  };
+
   const logVisit = async (id) => {
     if (!newVisit.date || !newVisit.procedure) return;
     try {
@@ -625,6 +652,8 @@ export default function App() {
       });
       if (res.ok) {
         const visit = await res.json();
+        const pt = patients.find(p=>p.id===id);
+        logChange({ action_type:"VISIT_LOGGED", patient_alias:pt?.alias||id, description:`Logged visit for ${pt?.alias||id}: ${newVisit.procedure} on ${newVisit.date}` });
         setPatients(prev => prev.map(p =>
           p.id===id ? { ...p, lastVisit:newVisit.date, procedure:newVisit.procedure,
             nextAppt:newVisit.nextAppt||p.nextAppt,
@@ -732,6 +761,7 @@ ${rotationContext}
 NYUCD TERMINOLOGY & CONTEXT:
 - Use NYUCD language naturally: "comp care" (comprehensive care), "perio maint" (periodontal maintenance), "SRP" (scaling & root planing), "RCT" (root canal treatment), "AxiUm" (the EHR system), "attending" (supervising faculty), "clinic session" (morning or afternoon block), "requirements sign-off" (faculty approval of completed procedure), "pre-d" (pre-doctoral), "D-board" (dental board exams), "NERB/CDCA" (regional dental board exams), "comp exam" (comprehensive patient exam, D0150).
 - Students are D3 or D4 — D3s are in their first clinical year under close supervision, D4s have more autonomy and can supervise D3s on shared patients.
+- If the user is a post-graduate resident (GPR, OMFS, Periodontics, Endodontics, Prosthodontics, Orthodontics, or Pediatric Dentistry Resident), they have completed dental school and are now specializing. Treat them as clinical peers — use collegial, peer-level language rather than a supervisory or pedagogical tone. They are more clinically experienced than D3/D4 students and do not need basic explanations unless asked.
 - Graduation requires completing minimum procedure counts per discipline — these are tracked in the requirements section above.
 - Pre-authorization (pre-auth) is required for insurance-covered procedures above a fee threshold. Turnaround is typically 3–4 weeks.
 - Lab cases (crowns, dentures, partials, implant components) typically take 1–2 weeks. Students must coordinate with the lab and attending for try-ins and delivery appointments.
@@ -852,9 +882,14 @@ RESPONSE RULES:
     a.click();
   };
 
-  const filtered = filter==="All" ? patients
+  const filtered = (filter==="All" ? patients
     : filter==="Urgent" ? patients.filter(p=>calculateUrgency(p))
-    : patients.filter(p=>calculateStatus(p)===filter);
+    : patients.filter(p=>calculateStatus(p)===filter)
+  ).filter(p=>{
+    if(!rosterSearch.trim()) return true;
+    const q=rosterSearch.toLowerCase();
+    return (p.alias||"").toLowerCase().includes(q)||(p.chartNumber||"").toLowerCase().includes(q)||(p.procedure||"").toLowerCase().includes(q)||(p.id||"").toLowerCase().includes(q);
+  });
 
   const urgentPatients = patients.filter(p=>calculateUrgency(p)&&!p.treatmentComplete);
 
@@ -951,6 +986,15 @@ RESPONSE RULES:
                       <label style={labelStyle}>Student Year</label>
                       <select style={inputStyle} value={loginForm.year} onChange={e=>setLoginForm(p=>({...p,year:e.target.value}))}>
                         <option>D3</option><option>D4</option>
+                        <optgroup label="Post-Graduate Residents">
+                          <option>GPR Resident</option>
+                          <option>OMFS Resident</option>
+                          <option>Periodontics Resident</option>
+                          <option>Endodontics Resident</option>
+                          <option>Prosthodontics Resident</option>
+                          <option>Orthodontics Resident</option>
+                          <option>Pediatric Dentistry Resident</option>
+                        </optgroup>
                       </select>
                       <div style={{ fontSize:11, color:NYU.gray400, marginTop:6 }}>D1 and D2 students do not have active patient access.</div>
                     </div>
@@ -1246,9 +1290,100 @@ RESPONSE RULES:
             })}
           </div>
 
+          {/* ── TODAY TAB ── */}
+          {tab==="today"&&(()=>{
+            const todayStr = new Date().toISOString().split("T")[0];
+            const hour = new Date().getHours();
+            const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+            const todayPts = patients.filter(p=>p.nextAppt===todayStr).sort((a,b)=>(a.nextApptTime||"").localeCompare(b.nextApptTime||""));
+            const pendingCount = patients.filter(p=>{
+              const pa=getPreAuthNudge(p), lb=getLabNudge(p);
+              return pa||lb||(!p.nextAppt&&calculateStatus(p)==="F/U Appt Needed");
+            }).length;
+            const totalRequired = customGoals.filter(g=>g.visible).reduce((s,g)=>s+g.required,0);
+            const totalCompleted = customGoals.filter(g=>g.visible).reduce((sum,g)=>sum+patients.filter(p=>p.discipline===g.discipline&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0),0);
+            const reqLeft = Math.max(0,totalRequired-totalCompleted);
+            const urgentNonToday = patients.filter(p=>calculateUrgency(p)&&p.nextAppt!==todayStr);
+            const APPT_ICON = {"🦷":"Restorative","🧹":"Periodontics","🩺":"Oral Surgery","🫀":"Endodontics","😁":"Prosthodontics","👶":"Pediatric Dentistry","🦴":"Oral Medicine","😬":"Orthodontics"};
+            const getApptBadge = (p) => {
+              const pa=getPreAuthNudge(p); const lb=getLabNudge(p);
+              if(pa) return { label:pa.label, color:pa.color, bg:pa.bg };
+              if(lb) return { label:lb.label, color:lb.color, bg:lb.bg };
+              return null;
+            };
+            return (
+              <div>
+                <div style={{ fontFamily:"'Fraunces', serif", fontSize:28, fontWeight:700, color:NYU.gray900, marginBottom:4 }}>{greeting}, {user?.name?.split(" ")[0]}.</div>
+                <div style={{ fontSize:13, color:NYU.gray400, marginBottom:24 }}>Here's your day at a glance.</div>
+                <div style={{ display:"flex", gap:12, marginBottom:28, flexWrap:"wrap" }}>
+                  {[{ label:"Patients today", value:todayPts.length, color:T.purple, bg:T.purpleLight },{ label:"Pending items", value:pendingCount, color:NYU.amber, bg:"#fef3c7" },{ label:"Requirements left", value:reqLeft, color:NYU.green, bg:"#dcfce7" }].map(s=>(
+                    <div key={s.label} style={{ flex:1, minWidth:140, background:s.bg, borderRadius:14, padding:"14px 18px" }}>
+                      <div style={{ fontSize:26, fontWeight:700, color:s.color }}>{s.value}</div>
+                      <div style={{ fontSize:12, color:NYU.gray500||NYU.gray400, marginTop:3 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontWeight:700, fontSize:14, color:NYU.gray900, marginBottom:12 }}>Today's Appointments</div>
+                {todayPts.length===0 ? (
+                  <div style={{ background:"white", borderRadius:16, padding:"28px 20px", textAlign:"center", border:`1px solid ${NYU.gray100}`, color:NYU.gray400, fontSize:14, marginBottom:24 }}>
+                    No appointments scheduled for today — use + Add Patient or log a visit for any patient below.
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:24 }}>
+                    {todayPts.map(p=>{
+                      const ava=DISCIPLINE_AVATAR[p.discipline]||{ bg:T.lavender, color:T.purple, initial:"??" };
+                      const badge=getApptBadge(p);
+                      return (
+                        <div key={p.id} style={{ background:"white", borderRadius:16, padding:"14px 16px", display:"flex", alignItems:"center", gap:14, border:`1px solid ${NYU.gray100}`, boxShadow:"0 1px 4px rgba(107,33,168,0.05)" }}>
+                          <div style={{ width:44, height:44, borderRadius:13, background:ava.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                            <span style={{ fontSize:12, fontWeight:700, color:ava.color }}>{ava.initial}</span>
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontWeight:700, fontSize:15, color:NYU.gray900 }}>{p.alias}</div>
+                            <div style={{ fontSize:12, color:NYU.gray400 }}>{p.procedure||"No procedure"} · {p.nextApptTime||"Time TBD"}</div>
+                            {badge&&<span style={{ fontSize:10, fontWeight:600, color:badge.color, background:badge.bg, borderRadius:99, padding:"2px 8px", display:"inline-block", marginTop:4 }}>{badge.label}</span>}
+                          </div>
+                          <button className="action-btn" onClick={()=>{ setDetailPatient(p.id); setShowLogModal(p.id); setNewVisit({ date:todayStr, procedure:"", notes:"", nextAppt:"", cdtCode:"" }); setNlpInput(""); setNlpParsed(null); setNlpError(""); }} style={{ background:"#0d9488", color:"white", fontSize:12, padding:"7px 14px", whiteSpace:"nowrap", flexShrink:0 }}>Log Visit</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {urgentNonToday.length>0&&(
+                  <>
+                    <div style={{ fontWeight:700, fontSize:14, color:NYU.gray900, marginBottom:12 }}>Also needs attention</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {urgentNonToday.slice(0,5).map(p=>{
+                        const ava=DISCIPLINE_AVATAR[p.discipline]||{ bg:T.lavender, color:T.purple, initial:"??" };
+                        const reasons=calculateUrgency(p)||[];
+                        return (
+                          <div key={p.id} onClick={()=>setDetailPatient(p.id)} style={{ background:"white", borderRadius:14, padding:"12px 16px", display:"flex", alignItems:"center", gap:12, border:"1px solid #fed7aa", cursor:"pointer" }}>
+                            <div style={{ width:38, height:38, borderRadius:11, background:ava.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                              <span style={{ fontSize:11, fontWeight:700, color:ava.color }}>{ava.initial}</span>
+                            </div>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontWeight:600, fontSize:14, color:NYU.gray900 }}>{p.alias}</div>
+                              <div style={{ fontSize:12, color:NYU.orange }}>{reasons[0]}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
           {/* ── ROSTER TAB ── */}
           {tab==="roster"&&(
             <>
+              <input
+                style={{ width:"100%", boxSizing:"border-box", border:`1.5px solid ${NYU.gray200}`, borderRadius:10, padding:"10px 14px", fontSize:14, fontFamily:"'Inter', sans-serif", color:NYU.gray900, outline:"none", marginBottom:12 }}
+                placeholder="Search by alias, chart number, or procedure…"
+                value={rosterSearch}
+                onChange={e=>setRosterSearch(e.target.value)}
+              />
               <div className="filter-row" style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
                 {["All","Active","Urgent","F/U Needed","Complete"].map(f=>(
                   <button key={f} className="filter-btn" onClick={()=>setFilter(f)} style={{ background:filter===f?T.purple:NYU.gray100, color:filter===f?"white":NYU.gray600, border:"none", fontSize:12, padding:"6px 14px" }}>{f}</button>
@@ -1678,7 +1813,7 @@ RESPONSE RULES:
                       </select>
                       <button onClick={()=>setNoteDraft(p=>({...p,pinned:!p.pinned}))} style={{ background:noteDraft.pinned?NYU.amberLight:NYU.gray100,border:"none",borderRadius:99,padding:"4px 12px",cursor:"pointer",fontSize:12,color:noteDraft.pinned?NYU.amber:NYU.gray400,fontWeight:600,fontFamily:"'Inter', sans-serif" }}>{noteDraft.pinned?"📌 Pinned":"Pin"}</button>
                       <div style={{ flex:1 }}/>
-                      <button onClick={async()=>{ await fetch(`/api/notes/${activeNote}`,{method:"DELETE"}); setNotes(prev=>prev.filter(n=>n.id!==activeNote)); setActiveNote(null); setNoteDraft(null); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter', sans-serif",padding:"4px 8px" }}>Delete</button>
+                      <button onClick={()=>setConfirmDelete({ message:`Delete note "${noteDraft?.title||"Untitled"}"?`, onConfirm:async()=>{ logChange({ action_type:"NOTE_DELETED",patient_alias:"",description:`Deleted note "${noteDraft?.title||"Untitled"}"` }); await fetch(`/api/notes/${activeNote}`,{method:"DELETE"}); setNotes(prev=>prev.filter(n=>n.id!==activeNote)); setActiveNote(null); setNoteDraft(null); } })} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter', sans-serif",padding:"4px 8px" }}>Delete</button>
                       <button className="action-btn" onClick={async()=>{ const updated={...noteDraft,updatedAt:new Date().toISOString().split("T")[0]}; await fetch(`/api/notes/${activeNote}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(updated)}); setNotes(prev=>prev.map(n=>n.id===activeNote?updated:n)); setNoteDraft(updated); }} style={{ background:T.purple,color:"white",padding:"7px 18px",fontSize:13 }}>Save</button>
                     </div>
                     <input style={{ width:"100%",fontSize:24,fontWeight:700,color:NYU.gray900,fontFamily:"'Fraunces', serif",border:"none",outline:"none",padding:"24px 28px 8px",letterSpacing:"-0.01em" }} placeholder="Untitled" value={noteDraft.title} onChange={e=>setNoteDraft(p=>({...p,title:e.target.value}))}/>
@@ -2204,7 +2339,7 @@ RESPONSE RULES:
                 <div style={{ marginBottom:16 }}>
                   <div style={{ fontSize:11,color:NYU.gray400,fontWeight:500,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em" }}>Lab Status</div>
                   <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:10 }}>
-                    {LAB_STATUSES.map(s=>{ const m=LAB_META[s]; const active=patient.labStatus===s; return <button key={s} className="pill-btn" onClick={()=>updateField(patient.id,"labStatus",s)} style={{ background:active?m.color:NYU.gray100,color:active?"white":NYU.gray600 }}>{s}</button>; })}
+                    {LAB_STATUSES.map(s=>{ const m=LAB_META[s]; const active=patient.labStatus===s; return <button key={s} className="pill-btn" onClick={()=>{ updateField(patient.id,"labStatus",s); if(!active) logChange({ action_type:"LAB_UPDATED",patient_alias:patient.alias,description:`Lab status for ${patient.alias} changed to ${s}` }); }} style={{ background:active?m.color:NYU.gray100,color:active?"white":NYU.gray600 }}>{s}</button>; })}
                   </div>
                   {["Sent","Pending"].includes(patient.labStatus)&&(
                     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
@@ -2237,7 +2372,7 @@ RESPONSE RULES:
                 <div>
                   <div style={{ fontSize:11,color:NYU.gray400,fontWeight:500,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em" }}>Pre-Authorization</div>
                   <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:10 }}>
-                    {PREAUTH_STATUSES.map(s=>{ const m=PREAUTH_META[s]; const active=patient.preAuth===s; return <button key={s} className="pill-btn" onClick={()=>updateField(patient.id,"preAuth",s)} style={{ background:active?m.color:NYU.gray100,color:active?"white":NYU.gray600 }}>{s}</button>; })}
+                    {PREAUTH_STATUSES.map(s=>{ const m=PREAUTH_META[s]; const active=patient.preAuth===s; return <button key={s} className="pill-btn" onClick={()=>{ updateField(patient.id,"preAuth",s); if(!active) logChange({ action_type:"PREAUTH_UPDATED",patient_alias:patient.alias,description:`Pre-auth for ${patient.alias} changed to ${s}` }); }} style={{ background:active?m.color:NYU.gray100,color:active?"white":NYU.gray600 }}>{s}</button>; })}
                   </div>
                   {patient.preAuth==="Submitted"&&(
                     <div>
@@ -2287,7 +2422,10 @@ RESPONSE RULES:
                                 {v.cdtCode&&<div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>CDT Code</div><div style={{ fontSize:13,fontWeight:500,color:T.purple }}>{v.cdtCode}</div></div>}
                               </div>
                               {v.notes&&<div><div style={{ fontSize:10,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3 }}>Clinical Notes</div><div style={{ fontSize:13,color:NYU.gray600,lineHeight:1.5,background:"white",borderRadius:8,padding:"8px 10px" }}>{v.notes}</div></div>}
-                              <div style={{ marginTop:8,fontSize:11,color:T.purple,fontWeight:500 }}>Visit #{patient.visitLog.length-i} of {patient.visitLog.length}</div>
+                              <div style={{ marginTop:8,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                                <div style={{ fontSize:11,color:T.purple,fontWeight:500 }}>Visit #{patient.visitLog.length-i} of {patient.visitLog.length}</div>
+                                <button onClick={e=>{ e.stopPropagation(); setConfirmDelete({ message:`Delete this visit (${v.procedure} on ${v.date})?`, onConfirm:async()=>{ const updated={...patient,visitLog:patient.visitLog.filter((_,vi)=>vi!==i)}; await fetch(`/api/patients/${patient.id}`,{ method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(updated) }); logChange({ action_type:"VISIT_DELETED",patient_alias:patient.alias,description:`Deleted visit for ${patient.alias}: ${v.procedure} on ${v.date}` }); setPatients(prev=>prev.map(p=>p.id===patient.id?updated:p)); setSelectedVisit(null); } }); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,color:NYU.red,fontFamily:"'Inter', sans-serif",fontWeight:500 }}>Delete visit</button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -2344,6 +2482,24 @@ RESPONSE RULES:
                     </div>
                     <div><div style={{ fontSize:11,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6 }}>Shared Notes</div><textarea rows={3} style={{ ...inputStyle,resize:"vertical",fontSize:13 }} placeholder="Notes visible to your paired provider..." value={patient.handoffNotes||""} onChange={e=>updateField(patient.id,"handoffNotes",e.target.value)}/></div>
                     {patient.handoffPartner&&<div style={{ background:NYU.greenLight,borderRadius:10,padding:"10px 14px",marginTop:14,display:"flex",alignItems:"center",gap:8 }}><span>✅</span><span style={{ fontSize:13,fontWeight:600,color:NYU.green }}>Sharing active with @{patient.handoffPartner} ({patient.handoffPartnerYear})</span></div>}
+
+                    {/* Quick Notes to Partner */}
+                    <div style={{ marginTop:18 }}>
+                      <div style={{ fontSize:11,color:NYU.gray400,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10 }}>Quick Notes to Partner</div>
+                      <div style={{ display:"flex",gap:8,marginBottom:12 }}>
+                        <input style={{ flex:1,...inputStyle,fontSize:13,padding:"8px 12px" }} placeholder="Send a quick note…" value={partnerNoteInput[patient.id]||""} onChange={e=>setPartnerNoteInput(p=>({...p,[patient.id]:e.target.value}))} onKeyDown={e=>{ if(e.key==="Enter"&&(partnerNoteInput[patient.id]||"").trim()){ const msg=(partnerNoteInput[patient.id]||"").trim(); const ts=new Date().toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}); const note={sender:user?.name||"Me",timestamp:ts,text:msg}; const updated={...patient,partnerNotes:[...(patient.partnerNotes||[]),note]}; updateField(patient.id,"partnerNotes",updated.partnerNotes); setPartnerNoteInput(p=>({...p,[patient.id]:""})); } }}/>
+                        <button className="action-btn" onClick={()=>{ const msg=(partnerNoteInput[patient.id]||"").trim(); if(!msg) return; const ts=new Date().toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}); const note={sender:user?.name||"Me",timestamp:ts,text:msg}; const updated={...patient,partnerNotes:[...(patient.partnerNotes||[]),note]}; updateField(patient.id,"partnerNotes",updated.partnerNotes); setPartnerNoteInput(p=>({...p,[patient.id]:""})); }} style={{ background:"#0d9488",color:"white",padding:"8px 14px",fontSize:13 }}>Send</button>
+                      </div>
+                      {(patient.partnerNotes||[]).slice(-5).map((n,i)=>{
+                        const isMe=n.sender===user?.name;
+                        return (
+                          <div key={i} style={{ display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start",marginBottom:8 }}>
+                            <div style={{ background:isMe?"#0d9488":"#f3f4f6",color:isMe?"white":NYU.gray900,borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"8px 12px",fontSize:13,maxWidth:"80%" }}>{n.text}</div>
+                            <div style={{ fontSize:10,color:NYU.gray400,marginTop:3 }}>{n.sender} · {n.timestamp}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </>
                 )}
                 {/* Supporting provider view */}
@@ -2362,14 +2518,105 @@ RESPONSE RULES:
                   <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Treatment Complete</div>
                   <div style={{ fontSize:12,color:NYU.gray400,marginTop:2 }}>Mark when all treatment is finished</div>
                 </div>
-                <div onClick={()=>updateField(patient.id,"treatmentComplete",!patient.treatmentComplete)} style={{ width:48,height:26,borderRadius:99,background:patient.treatmentComplete?NYU.green:NYU.gray200,cursor:"pointer",transition:"all 0.2s",position:"relative",flexShrink:0 }}>
+                <div onClick={()=>{ updateField(patient.id,"treatmentComplete",!patient.treatmentComplete); logChange({ action_type:"TREATMENT_COMPLETE",patient_alias:patient.alias,description:`Marked ${patient.alias} treatment ${!patient.treatmentComplete?"complete":"incomplete"}` }); }} style={{ width:48,height:26,borderRadius:99,background:patient.treatmentComplete?NYU.green:NYU.gray200,cursor:"pointer",transition:"all 0.2s",position:"relative",flexShrink:0 }}>
                   <div style={{ position:"absolute",top:3,left:patient.treatmentComplete?24:3,width:20,height:20,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
                 </div>
               </div>
+
+              {/* Delete Patient */}
+              {patient.isPrimaryProvider!==false&&(
+                <div style={{ textAlign:"center",marginBottom:24 }}>
+                  <button onClick={()=>setConfirmDelete({ message:`Delete patient "${patient.alias}"?`, onConfirm:async()=>{ await fetch(`/api/patients/${patient.id}`,{ method:"DELETE" }); logChange({ action_type:"PATIENT_DELETED",patient_alias:patient.alias,description:`Deleted patient ${patient.alias}` }); setPatients(prev=>prev.filter(p=>p.id!==patient.id)); setDetailPatient(null); } })} style={{ background:"none",border:"none",cursor:"pointer",fontSize:13,color:NYU.red,fontFamily:"'Inter', sans-serif",fontWeight:500,padding:"8px 0" }}>Delete Patient</button>
+                </div>
+              )}
             </div>
           </div>
         );
       })()}
+
+      {/* ── CONFIRM DELETE MODAL ── */}
+      {confirmDelete&&(
+        <>
+          <div onClick={()=>setConfirmDelete(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:3000 }}/>
+          <div style={{ position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:3001,background:"white",borderRadius:16,padding:"24px 24px",maxWidth:380,width:"90%",boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}>
+            <div style={{ fontWeight:700,fontSize:16,color:NYU.gray900,marginBottom:8 }}>Confirm Delete</div>
+            <div style={{ fontSize:14,color:NYU.gray600,marginBottom:6 }}>{confirmDelete.message}</div>
+            <div style={{ fontSize:12,color:NYU.gray400,marginBottom:20 }}>This cannot be undone.</div>
+            <div style={{ display:"flex",gap:10 }}>
+              <button className="action-btn" onClick={()=>setConfirmDelete(null)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>Cancel</button>
+              <button className="action-btn" onClick={()=>{ confirmDelete.onConfirm(); setConfirmDelete(null); }} style={{ flex:1,background:NYU.red,color:"white" }}>Delete</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── QUICK LOG FLOATING BUTTON ── */}
+      <div style={{ position:"fixed",bottom:28,left:28,zIndex:2000 }}>
+        {quickLogOpen&&(
+          <div style={{ position:"absolute",bottom:72,left:0,width:340,background:"white",borderRadius:20,boxShadow:"0 8px 40px rgba(0,0,0,0.18)",overflow:"hidden",animation:"slideUp 0.2s ease" }}>
+            <div style={{ background:"#0d9488",padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+              <div style={{ color:"white",fontWeight:700,fontSize:14 }}>✦ Quick Log Visit</div>
+              <button onClick={()=>setQuickLogOpen(false)} style={{ background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,width:26,height:26,cursor:"pointer",color:"white",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center" }}>×</button>
+            </div>
+            <div style={{ padding:"16px" }}>
+              <div style={{ marginBottom:12 }}>
+                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Patient</label>
+                <select value={quickLogPatientId} onChange={e=>setQuickLogPatientId(e.target.value)} style={{ width:"100%",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"9px 12px",fontSize:13,fontFamily:"'Inter', sans-serif",color:NYU.gray900,background:"white",outline:"none" }}>
+                  <option value="">Select patient…</option>
+                  {(()=>{
+                    const todayStr=new Date().toISOString().split("T")[0];
+                    const todayPts=patients.filter(p=>p.nextAppt===todayStr);
+                    const otherPts=patients.filter(p=>p.nextAppt!==todayStr&&!p.treatmentComplete);
+                    return [
+                      todayPts.length>0&&<optgroup key="today" label="📅 Today's patients">{todayPts.map(p=><option key={p.id} value={p.id}>{p.alias}</option>)}</optgroup>,
+                      otherPts.length>0&&<optgroup key="other" label="All active patients">{otherPts.map(p=><option key={p.id} value={p.id}>{p.alias}</option>)}</optgroup>
+                    ];
+                  })()}
+                </select>
+              </div>
+              <div style={{ marginBottom:12 }}>
+                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Visit note</label>
+                <textarea rows={3} value={quickLogNlp} onChange={e=>setQuickLogNlp(e.target.value)} placeholder='e.g. "Saw patient today, did a crown prep, follow up in 3 weeks"' style={{ width:"100%",boxSizing:"border-box",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"9px 12px",fontSize:13,fontFamily:"'Inter', sans-serif",color:NYU.gray900,resize:"none",outline:"none" }}/>
+              </div>
+              <button className="action-btn" disabled={!quickLogPatientId||!quickLogNlp.trim()||quickLogLoading}
+                onClick={async()=>{
+                  setQuickLogLoading(true);
+                  try {
+                    const todayStr=new Date().toISOString().split("T")[0];
+                    let parsed=null;
+                    try {
+                      const r=await fetch("/api/parse",{ method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ model:"claude-sonnet-4-20250514",max_tokens:500,messages:[{ role:"user",content:`Extract visit info as JSON only: {"date":"YYYY-MM-DD","procedure":"name","notes":"context"}\nNote: "${quickLogNlp}"` }] }) });
+                      const d=await r.json();
+                      parsed=JSON.parse(d.content[0].text.trim());
+                    } catch(_){}
+                    const visit={ date:parsed?.date||todayStr,procedure:parsed?.procedure||quickLogNlp.slice(0,60),notes:parsed?.notes||quickLogNlp,nextAppt:"",cdtCode:"" };
+                    const res=await fetch(`/api/patients/${quickLogPatientId}/visits`,{ method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(visit) });
+                    if(res.ok){
+                      const vData=await res.json();
+                      const pt=patients.find(p=>p.id===quickLogPatientId);
+                      setPatients(prev=>prev.map(p=>p.id===quickLogPatientId?{ ...p,lastVisit:visit.date,procedure:visit.procedure,visitLog:[...(p.visitLog||[]),vData] }:p));
+                      logChange({ action_type:"VISIT_LOGGED",patient_alias:pt?.alias||quickLogPatientId,description:`Quick logged visit for ${pt?.alias||quickLogPatientId}: ${visit.procedure}` });
+                      const alias=pt?.alias||"patient";
+                      setQuickLogToast(`Visit logged for ${alias} ✓`);
+                      setTimeout(()=>setQuickLogToast(""),2500);
+                      setQuickLogOpen(false);
+                      setQuickLogNlp("");
+                      setQuickLogPatientId("");
+                    }
+                  } catch(e){ console.error(e); }
+                  setQuickLogLoading(false);
+                }}
+                style={{ width:"100%",background:"#0d9488",color:"white",fontSize:13,opacity:(!quickLogPatientId||!quickLogNlp.trim()||quickLogLoading)?0.6:1 }}>
+                {quickLogLoading?"Logging…":"Submit Visit"}
+              </button>
+            </div>
+          </div>
+        )}
+        {quickLogToast&&(
+          <div style={{ position:"absolute",bottom:72,left:0,background:"#0d9488",color:"white",borderRadius:12,padding:"10px 16px",fontSize:13,fontWeight:600,whiteSpace:"nowrap",boxShadow:"0 4px 16px rgba(0,0,0,0.15)",animation:"slideUp 0.2s ease" }}>{quickLogToast}</div>
+        )}
+        <button onClick={()=>setQuickLogOpen(v=>!v)} style={{ width:56,height:56,borderRadius:"50%",background:"#0d9488",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(13,148,136,0.45)",fontSize:22,color:"white" }}>✦</button>
+      </div>
 
       {/* ── FLOATING CHAT ── */}
       <div style={{ position:"fixed",bottom:28,right:28,zIndex:2000 }}>
@@ -2578,9 +2825,8 @@ RESPONSE RULES:
               {/* Remove appointment option for edit mode */}
               {apptModalMode==="edit"&&(
                 <button onClick={()=>{
-                  updateField(apptDraft.patientId,"nextAppt",null);
-                  updateField(apptDraft.patientId,"nextApptTime","");
-                  setShowApptModal(false);
+                  const p=patients.find(x=>x.id===apptDraft.patientId);
+                  setConfirmDelete({ message:`Remove appointment for ${p?.alias||"this patient"}?`, onConfirm:()=>{ updateField(apptDraft.patientId,"nextAppt",null); updateField(apptDraft.patientId,"nextApptTime",""); logChange({ action_type:"APPT_REMOVED",patient_alias:p?.alias||"",description:`Removed appointment for ${p?.alias||apptDraft.patientId}` }); setShowApptModal(false); } });
                 }} style={{ background:"none",border:`1px solid #fecaca`,borderRadius:10,padding:"8px",cursor:"pointer",fontSize:12,color:NYU.red,fontFamily:"'Inter', sans-serif",fontWeight:500 }}>
                   Remove Appointment
                 </button>
@@ -2758,7 +3004,7 @@ RESPONSE RULES:
                 <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Profile</div>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div><label style={labelStyle}>Full Name</label><input style={inputStyle} value={settingsDraft.name} onChange={e=>setSettingsDraft(p=>({...p,name:e.target.value}))}/></div>
-                  <div><label style={labelStyle}>Student Year</label><select style={inputStyle} value={settingsDraft.year} onChange={e=>setSettingsDraft(p=>({...p,year:e.target.value}))}><option>D3</option><option>D4</option></select></div>
+                  <div><label style={labelStyle}>Student Year</label><select style={inputStyle} value={settingsDraft.year} onChange={e=>setSettingsDraft(p=>({...p,year:e.target.value}))}><option>D3</option><option>D4</option><optgroup label="Post-Graduate Residents"><option>GPR Resident</option><option>OMFS Resident</option><option>Periodontics Resident</option><option>Endodontics Resident</option><option>Prosthodontics Resident</option><option>Orthodontics Resident</option><option>Pediatric Dentistry Resident</option></optgroup></select></div>
                 </div>
               </div>
               <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
@@ -2809,7 +3055,7 @@ RESPONSE RULES:
                     <div key={r.id} style={{ background:NYU.gray50,borderRadius:12,padding:"12px 14px",border:`1px solid #a5f3fc` }}>
                       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
                         <span style={{ fontSize:12,fontWeight:600,color:ROTATION_COLOR }}>Rotation {idx+1}</span>
-                        <button onClick={()=>setRotations(prev=>prev.filter(x=>x.id!==r.id))} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter', sans-serif" }}>Remove</button>
+                        <button onClick={()=>setConfirmDelete({ message:`Remove rotation at ${r.site||"this site"}?`, onConfirm:()=>{ logChange({ action_type:"ROTATION_REMOVED",patient_alias:"",description:`Removed rotation at ${r.site||"unknown site"}` }); setRotations(prev=>prev.filter(x=>x.id!==r.id)); } })} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter', sans-serif" }}>Remove</button>
                       </div>
                       <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                         <div><label style={labelStyle}>Site Name</label><input style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} placeholder="e.g. Bellevue Hospital" value={r.site} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,site:e.target.value}:x))}/></div>
@@ -2839,6 +3085,34 @@ RESPONSE RULES:
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* ── Activity Log ── */}
+              <div style={{ background:NYU.gray50,borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+                  <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em" }}>Activity Log</div>
+                  {changelog.length>10&&<button onClick={()=>setChangelogExpanded(v=>!v)} style={{ background:"none",border:"none",fontSize:12,color:T.purple,cursor:"pointer",fontFamily:"'Inter', sans-serif" }}>{changelogExpanded?"Show less":"View all"}</button>}
+                </div>
+                {changelog.length===0?(
+                  <div style={{ fontSize:13,color:NYU.gray400,textAlign:"center",padding:"12px 0" }}>No activity yet.</div>
+                ):(
+                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                    {(changelogExpanded?changelog:changelog.slice(0,10)).map((entry,i)=>{
+                      const ICONS={PATIENT_ADDED:"👤",VISIT_LOGGED:"📋",PATIENT_DELETED:"🗑",VISIT_DELETED:"🗑",NOTE_DELETED:"🗑",APPT_REMOVED:"📅",ROTATION_REMOVED:"🔄",TREATMENT_COMPLETE:"✅",PREAUTH_UPDATED:"📄",LAB_UPDATED:"🧪"};
+                      const icon=ICONS[entry.action_type]||"•";
+                      const ts=new Date(entry.timestamp).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+                      return (
+                        <div key={i} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
+                          <span style={{ fontSize:14,flexShrink:0 }}>{icon}</span>
+                          <div style={{ flex:1,minWidth:0 }}>
+                            <div style={{ fontSize:12,color:NYU.gray700||NYU.gray600,lineHeight:1.4 }}>{entry.description}</div>
+                            <div style={{ fontSize:11,color:NYU.gray400,marginTop:2 }}>{ts}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* ── Demo Data ── */}

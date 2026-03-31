@@ -1,0 +1,94 @@
+Yes — let's add all of it in one shot. Paste this into Replit Agent:
+
+---
+
+Add the following features to ClinIQ. Do not break any existing functionality. Make all changes to the existing App.jsx and server.js files.
+
+**1. TODAY TAB**
+
+Add a new "Today" tab as the first tab before Patient Roster. Use the label "📋 Today" and key "today" in TAB_DEFS and DEFAULT_TAB_ORDER.
+
+The Today tab shows:
+
+A greeting at the top based on time of day — "Good morning [name]" before noon, "Good afternoon [name]" after noon. Style it in Fraunces serif, large and warm.
+
+Below the greeting show three small stat chips in a row: patients today (nextAppt equals today's date), pending items (pre-auth nudges + lab nudges + patients with no follow-up), and requirements left (total visits remaining).
+
+Then show today's appointments as a vertical card list sorted by nextApptTime. Each card shows the discipline avatar, patient alias, procedure, appointment time, the single most important pending item as a colored badge, and a teal Log Visit button on the right that opens the log visit modal pre-filled for that patient.
+
+Below today's appointments show a section "Also needs attention" — urgent patients without an appointment today.
+
+Empty state if no appointments: "No appointments scheduled for today — use + Add Patient or log a visit for any patient below."
+
+**2. QUICK LOG FLOATING BUTTON**
+
+Add a second floating button on the bottom LEFT of the screen — a teal circle with a ✦ icon. Position it at bottom 28px, left 28px, z-index 2000.
+
+Tapping it opens a compact modal with a patient selector (today's patients shown first as a highlighted group, then all other active patients), a description textarea with voice input button, and a Submit button. On submit call parseWithAI to parse the note, then call logVisit to save it. Show a brief green success toast "Visit logged for [alias] ✓" that disappears after 2 seconds.
+
+**3. SEARCH BAR**
+
+Add a search input above the stats grid on the roster tab. Placeholder: "Search by alias, chart number, or procedure..." As the user types, filter the patient list in real time. Show results as the filtered roster below — no separate dropdown needed, just filter the existing roster list. Clear the search when the user clicks a patient.
+
+**4. DELETE SYSTEM**
+
+Build a reusable ConfirmDelete component that takes message, onConfirm, and onCancel as props. It renders as a small modal (max-width 380px) with a red Delete button and a white Cancel button. Always show "This cannot be undone." in gray text below the message.
+
+Use ConfirmDelete for these five delete flows:
+
+Delete patient — only show if isPrimaryProvider is true. Add a "Delete Patient" red text button at the very bottom of the patient detail screen below the Treatment Complete toggle. On confirm: remove from state, call DELETE /api/patients/:id, close detail screen.
+
+Delete visit — when a visit is expanded in the timeline, show a small red "Delete visit" text link at the bottom. On confirm: remove from visitLog array, call PUT /api/patients/:id with updated patient.
+
+Delete note — the existing Delete button in the notebook already deletes without confirmation. Wrap it in ConfirmDelete before deleting.
+
+Delete appointment — the existing "Remove Appointment" button in the appointment edit modal already removes without confirmation. Wrap it in ConfirmDelete.
+
+Delete rotation — the existing "Remove" button in the rotation list in Settings already removes without confirmation. Wrap it in ConfirmDelete.
+
+**5. POST-GRAD YEAR OPTIONS**
+
+Update the Student Year selector on the login screen and in the Settings modal to include post-grad options. Keep D3 and D4 at the top. Add these below using an optgroup labeled "Post-Graduate Residents": GPR Resident, OMFS Resident, Periodontics Resident, Endodontics Resident, Prosthodontics Resident, Orthodontics Resident, Pediatric Dentistry Resident.
+
+Update the AI system prompt in sendChat to add a note that residents have completed dental school and are now specializing — they are more clinically experienced than D3/D4 students and the assistant should adjust its tone accordingly, treating them as peers rather than students in training.
+
+**6. PARTNER QUICK NOTE**
+
+On the patient detail screen, in the Paired Provider section, below the Shared Notes textarea, add a new subsection called "Quick Notes to Partner."
+
+Show a single-line input with a Send button. When sent, append to a partnerNotes array on the patient with timestamp (formatted as "Mar 31 · 2:45 PM"), sender name (user.name), and message text. Call updateField to save.
+
+Show the last 5 partner notes as a simple chat thread below the input. The logged-in user's notes appear right-aligned in a teal bubble. Partner notes appear left-aligned in a gray bubble. Each note shows sender name and timestamp below the bubble in small gray text.
+
+**7. CHANGELOG AUDIT LOG**
+
+Add a logChange helper function that silently posts to POST /api/changelog. Never block the UI — use fire and forget with .catch(()=>{}).
+
+```javascript
+const logChange = async (entry) => {
+  if (!user) return;
+  fetch("/api/changelog", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_name: user.name,
+      user_year: user.year,
+      ...entry
+    })
+  }).catch(() => {});
+};
+```
+
+Add this route to server.js:
+
+POST /api/changelog — insert a row into a changelog table with columns: id, timestamp, user_name, user_year, action_type, patient_alias, description. Create the table if it does not exist.
+
+GET /api/changelog — return last 50 entries for the current user ordered by timestamp descending.
+
+Call logChange automatically for these actions: patient added (PATIENT_ADDED), visit logged (VISIT_LOGGED), patient deleted (PATIENT_DELETED), visit deleted (VISIT_DELETED), note deleted (NOTE_DELETED), appointment removed (APPT_REMOVED), rotation removed (ROTATION_REMOVED), treatment marked complete (TREATMENT_COMPLETE), pre-auth status changed (PREAUTH_UPDATED), lab status changed (LAB_UPDATED).
+
+In the Settings modal, add an Activity Log section at the bottom above the Demo Data section. Show the 10 most recent changelog entries in a clean timeline. Each entry shows a timestamp, an icon based on action type, and the description. Add a small "View all" link that expands to show all 50.
+
+---
+
+That covers all 7 missing features in one prompt. Once Replit finishes, check these things first: the Today tab appears as the first tab, the Quick Log button is visible bottom left, the search bar appears above the patient list, and the Delete Patient button shows at the bottom of a patient detail screen. Let me know what it looks like when done.
