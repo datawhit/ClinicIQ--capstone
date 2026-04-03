@@ -365,6 +365,141 @@ const getSpecialtyNudge = (patient) => {
   return null;
 };
 
+const BEHAVIOR_DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+const analyzeBehavior = (patients, customGoals) => {
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+  const ms = (n) => n * 86400000;
+  const dAgoStr = (n) => new Date(now - ms(n)).toISOString().split("T")[0];
+
+  const allVisits = patients.flatMap(p =>
+    (p.visitLog||[]).map(v => ({ ...v, discipline:p.discipline, patientId:p.id, isPrimary:p.isPrimaryProvider!==false }))
+  );
+  const sortedDates = allVisits.map(v=>v.date).filter(Boolean).sort();
+
+  const result = { insights:[], paceTrend:"neutral", last4PerWeek:0, allTimePerWeek:0, last4Visits:0, neglectedDisciplines:[], summary:"" };
+  if (sortedDates.length < 1) return result;
+
+  // ── Pace trend ────────────────────────────────────────────────────────────
+  const fourWeeksAgo = dAgoStr(28);
+  const last4Visits = sortedDates.filter(d=>d>=fourWeeksAgo).length;
+  const allTimeWeeks = Math.max(1, (now - new Date(sortedDates[0])) / ms(7));
+  const allTimePerWeek = sortedDates.length / allTimeWeeks;
+  const last4PerWeek = last4Visits / 4;
+  result.last4Visits = last4Visits;
+  result.last4PerWeek = last4PerWeek;
+  result.allTimePerWeek = allTimePerWeek;
+
+  let paceTrend = "neutral";
+  if (allTimePerWeek > 0 && sortedDates.length >= 4) {
+    const ratio = last4PerWeek / allTimePerWeek;
+    if (ratio < 0.8) paceTrend = "slowing";
+    else if (ratio > 1.2) paceTrend = "accelerating";
+  }
+  result.paceTrend = paceTrend;
+
+  if (paceTrend === "slowing") {
+    result.insights.push({ type:"slowing", icon:"📉",
+      obs:`Your visit pace has dropped — ${last4Visits} visit${last4Visits!==1?"s":""} in the last 4 weeks vs your all-time average of ${(allTimePerWeek*4).toFixed(1)} per month.`,
+      rec:"Consider scheduling extra clinic sessions this week to stay on track." });
+  } else if (paceTrend === "accelerating") {
+    result.insights.push({ type:"accelerating", icon:"📈",
+      obs:`You're on a strong run — ${last4Visits} visits in the last 4 weeks, above your average of ${(allTimePerWeek*4).toFixed(1)} per month.`,
+      rec:"Keep this pace and you'll finish requirements ahead of schedule." });
+  }
+
+  // ── Preferred clinic day ──────────────────────────────────────────────────
+  if (sortedDates.length >= 5) {
+    const dayCounts = Array(7).fill(0);
+    sortedDates.forEach(d => dayCounts[new Date(d).getDay()]++);
+    const maxCount = Math.max(...dayCounts);
+    const maxDay = dayCounts.indexOf(maxCount);
+    if (maxCount / sortedDates.length >= 0.4) {
+      result.preferredDay = BEHAVIOR_DAY_NAMES[maxDay];
+      result.insights.push({ type:"preferred_day", icon:"📅",
+        obs:`You tend to be most productive on ${BEHAVIOR_DAY_NAMES[maxDay]}s — ${maxCount} of your ${sortedDates.length} visits fell on that day.`,
+        rec:`Make sure you have patients scheduled for your next ${BEHAVIOR_DAY_NAMES[maxDay]} session.` });
+    }
+  }
+
+  // ── Inactivity risk ───────────────────────────────────────────────────────
+  const sixtyDaysAgo = dAgoStr(60);
+  const recent60 = sortedDates.filter(d=>d>=sixtyDaysAgo).sort();
+  let longestGap = 0;
+  const gapDates = [...recent60, todayStr];
+  for (let i=1; i<gapDates.length; i++) {
+    const gap = (new Date(gapDates[i]) - new Date(gapDates[i-1])) / ms(1);
+    if (gap > longestGap) longestGap = gap;
+  }
+  if (recent60.length === 0 && sortedDates.length > 0) {
+    longestGap = (now - new Date(sortedDates[sortedDates.length-1])) / ms(1);
+  }
+  result.longestGap = Math.round(longestGap);
+  if (longestGap > 21) {
+    result.insights.push({ type:"inactivity", icon:"⚠️",
+      obs:`There's been a gap of ${Math.round(longestGap)} days without a logged visit in the last 60 days.`,
+      rec:"Your graduation pace requires consistent clinic attendance — consider booking sessions soon." });
+  }
+
+  // ── Neglected disciplines ─────────────────────────────────────────────────
+  const thirtyDaysAgo = dAgoStr(30);
+  const discLastVisit = {};
+  allVisits.filter(v=>v.date).forEach(v => {
+    if (!discLastVisit[v.discipline] || v.date > discLastVisit[v.discipline]) discLastVisit[v.discipline] = v.date;
+  });
+  const activeDiscs = [...new Set(patients.filter(p=>!p.treatmentComplete&&p.discipline).map(p=>p.discipline))];
+  activeDiscs.forEach(disc => {
+    const lastDate = discLastVisit[disc];
+    if (!lastDate || lastDate < thirtyDaysAgo) {
+      const goal = customGoals?.find(g=>g.discipline===disc);
+      const completed = patients.filter(p=>p.discipline===disc&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
+      const required = goal?.required||0;
+      const remaining = Math.max(0, required-completed);
+      const daysSince = lastDate ? Math.round((now-new Date(lastDate))/ms(1)) : null;
+      if (remaining > 0) {
+        result.neglectedDisciplines.push(disc);
+        result.insights.push({ type:"neglected", icon:"🦷",
+          obs:`You haven't seen a ${disc} patient in ${daysSince ? daysSince+" days" : "a while"}.`,
+          rec:`You still need ${remaining} more case${remaining!==1?"s":""} — consider prioritizing ${disc} this week.` });
+      }
+    }
+  });
+
+  // ── Month-over-month ──────────────────────────────────────────────────────
+  const thisMonth = todayStr.slice(0,7);
+  const lastMonth = new Date(now.getFullYear(), now.getMonth()-1, 1).toISOString().slice(0,7);
+  const thisMonthCount = sortedDates.filter(d=>d.startsWith(thisMonth)).length;
+  const lastMonthCount = sortedDates.filter(d=>d.startsWith(lastMonth)).length;
+  result.thisMonthCount = thisMonthCount;
+  result.lastMonthCount = lastMonthCount;
+  if (lastMonthCount > 0) {
+    const pctChange = Math.round(((thisMonthCount-lastMonthCount)/lastMonthCount)*100);
+    result.momPct = pctChange;
+    if (pctChange <= -10) {
+      result.insights.push({ type:"mom_decline", icon:"📊",
+        obs:`You logged ${Math.abs(pctChange)}% fewer visits this month than last month (${thisMonthCount} vs ${lastMonthCount}).`,
+        rec:"If this trend continues your projected graduation date may be delayed — try to pick up the pace." });
+    }
+  }
+
+  // ── AI summary string ─────────────────────────────────────────────────────
+  const parts = [];
+  if (paceTrend==="slowing") parts.push(`Student is slowing down — ${last4PerWeek.toFixed(1)} visits/week recently vs ${allTimePerWeek.toFixed(1)} all-time average.`);
+  else if (paceTrend==="accelerating") parts.push(`Student is accelerating — ${last4PerWeek.toFixed(1)} visits/week recently vs ${allTimePerWeek.toFixed(1)} all-time average.`);
+  if (result.preferredDay) parts.push(`Most productive on ${result.preferredDay}s.`);
+  if (longestGap > 21) parts.push(`Has not logged a visit in ${Math.round(longestGap)} days.`);
+  result.neglectedDisciplines.slice(0,3).forEach(d => {
+    const goal = customGoals?.find(g=>g.discipline===d);
+    const completed = patients.filter(p=>p.discipline===d&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
+    const remaining = Math.max(0,(goal?.required||0)-completed);
+    parts.push(`Has not seen a ${d} patient in over 30 days — ${remaining} case${remaining!==1?"s":""} still needed.`);
+  });
+  result.summary = parts.join(" ") || "No significant behavioral patterns detected.";
+
+  return result;
+};
+
 const generateId = (patients) => `PT-${String(patients.length+1).padStart(3,"0")}`;
 
 const daysDiff = (dateStr) => {
@@ -655,6 +790,7 @@ export default function App() {
   const [partnerNoteInput, setPartnerNoteInput] = useState({});
   const [showTransferModal, setShowTransferModal] = useState(null); // patient id
   const [transferToName, setTransferToName] = useState("");
+  const [weeklyToastDismissed, setWeeklyToastDismissed] = useState(false);
 
   // ── Theme ─────────────────────────────────────────────────────────────────────
   const T = { ...NYU, ...(THEMES[themePreset] || THEMES["nyu-purple"]) };
@@ -851,6 +987,8 @@ Note: "${nlpInput}"` }]
     const onTrack = projectedAdditional>=totalRemaining;
     const velocityPct = Math.min(100,Math.round((totalCompleted/totalRequired)*100));
     const velocityContext = `Graduation: ${graduationDateStr} (${daysToGraduation} days). Pace: ${visitsPerWeek.toFixed(1)} visits/week. Progress: ${totalCompleted}/${totalRequired} (${velocityPct}%). ${onTrack?"ON TRACK.":"AT RISK."}`;
+    const behavCtx = analyzeBehavior(patients, customGoals);
+    const behavioralContext = behavCtx.summary || "Insufficient visit history for behavioral analysis.";
     const fmt = (d) => d.toISOString().split("T")[0];
     const caseloadSummary = patients.map(p => {
       const completed = p.visitLog?.length||0;
@@ -885,6 +1023,8 @@ GRADUATION REQUIREMENTS:
 ${requirementsSummary}
 
 GRADUATION VELOCITY: ${velocityContext}
+
+BEHAVIORAL PATTERNS: ${behavioralContext}
 
 UPCOMING APPOINTMENTS:
 ${upcomingAppts||"None scheduled."}
@@ -1051,6 +1191,13 @@ RESPONSE RULES:
     const projectedForThis = Math.floor((completed/Math.max(totalCompleted,1))*projectedAdditional);
     return remaining>0 && projectedForThis<remaining;
   }).map(g=>g.discipline);
+
+  // ── Behavioral analysis ──
+  const behaviorAnalysis = analyzeBehavior(patients, customGoals);
+  const isMonday = new Date().getDay() === 1;
+  const thisWeekKey = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()); return d.toISOString().split("T")[0]; })();
+  const lastWeeklySummaryDate = typeof window!=="undefined" ? localStorage.getItem("lastWeeklySummaryDate") : null;
+  const showWeeklyToast = isMonday && lastWeeklySummaryDate!==thisWeekKey && !weeklyToastDismissed && behaviorAnalysis.insights.length>0;
 
   // ── Nudge collections ──
   const allPreAuthNudges = patients.filter(p=>getPreAuthNudge(p)!==null);
@@ -1302,6 +1449,17 @@ RESPONSE RULES:
                   <div style={{ marginTop:8, width:140, height:6, borderRadius:99, background:NYU.gray200, overflow:"hidden" }}>
                     <div style={{ height:"100%", borderRadius:99, width:`${velocityPct}%`, background:onTrack?NYU.green:NYU.red, transition:"width 0.6s ease" }}/>
                   </div>
+                  {behaviorAnalysis.paceTrend==="slowing"?(
+                    <div style={{ marginTop:10,fontSize:11,fontWeight:600,color:"#b45309",display:"flex",alignItems:"center",gap:4 }}>
+                      <span>⚠</span>
+                      <span>At current pace, graduation may be delayed — pick up the pace to stay on track.</span>
+                    </div>
+                  ):behaviorAnalysis.paceTrend!=="neutral"?(
+                    <div style={{ marginTop:10,fontSize:11,fontWeight:600,color:NYU.green,display:"flex",alignItems:"center",gap:4 }}>
+                      <span>✓</span>
+                      <span>At current pace, on track for graduation {graduationDateStr}.</span>
+                    </div>
+                  ):null}
                 </div>
               </div>
 
@@ -1451,7 +1609,19 @@ RESPONSE RULES:
             return (
               <div>
                 <div style={{ fontFamily:"'Fraunces', serif", fontSize:28, fontWeight:700, color:NYU.gray900, marginBottom:4 }}>{greeting}, {user?.name?.split(" ")[0]}.</div>
-                <div style={{ fontSize:13, color:NYU.gray400, marginBottom:24 }}>Here's your day at a glance.</div>
+                <div style={{ fontSize:13, color:NYU.gray400, marginBottom:16 }}>Here's your day at a glance.</div>
+                {showWeeklyToast&&(
+                  <div style={{ background:"linear-gradient(135deg,#6b21a8,#4f46e5)",borderRadius:14,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"flex-start",gap:12,boxShadow:"0 4px 16px rgba(107,33,168,0.2)" }}>
+                    <span style={{ fontSize:20,flexShrink:0 }}>📋</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ color:"white",fontWeight:700,fontSize:13,marginBottom:4 }}>Week of {new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
+                      <div style={{ color:"rgba(255,255,255,0.88)",fontSize:12,lineHeight:1.5 }}>
+                        Last week you logged {behaviorAnalysis.last4Visits} visit{behaviorAnalysis.last4Visits!==1?"s":""}. Your pace is {behaviorAnalysis.paceTrend==="slowing"?"slowing":behaviorAnalysis.paceTrend==="accelerating"?"accelerating":"on track"}.{behaviorAnalysis.neglectedDisciplines.length>0?` Focus this week: ${behaviorAnalysis.neglectedDisciplines[0]}.`:""}
+                      </div>
+                    </div>
+                    <button onClick={()=>{ setWeeklyToastDismissed(true); localStorage.setItem("lastWeeklySummaryDate",thisWeekKey); }} style={{ background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,color:"white",fontSize:16,cursor:"pointer",padding:"2px 8px",flexShrink:0,fontFamily:"'Inter',sans-serif" }}>×</button>
+                  </div>
+                )}
                 <div style={{ display:"flex", gap:12, marginBottom:28, flexWrap:"wrap" }}>
                   {[{ label:"Patients today", value:todayPts.length, color:T.purple, bg:T.purpleLight },{ label:"Pending items", value:pendingCount, color:NYU.amber, bg:"#fef3c7" },{ label:"Requirements left", value:reqLeft, color:NYU.green, bg:"#dcfce7" }].map(s=>(
                     <div key={s.label} style={{ flex:1, minWidth:140, background:s.bg, borderRadius:14, padding:"14px 18px" }}>
@@ -1539,6 +1709,25 @@ RESPONSE RULES:
                     </div>
                   );
                 })()}
+                {/* ── BEHAVIORAL INSIGHTS ── */}
+                {behaviorAnalysis.insights.length>0&&(
+                  <div style={{ marginTop:16 }}>
+                    <div style={{ fontWeight:700,fontSize:14,color:NYU.gray900,marginBottom:10 }}>🔬 Behavioral Insights</div>
+                    <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                      {behaviorAnalysis.insights.slice(0,5).map((ins,i)=>(
+                        <div key={i} style={{ background:"#f5f3ff",borderRadius:14,padding:"12px 16px",border:"1px solid #e9d5ff" }}>
+                          <div style={{ display:"flex",gap:8,alignItems:"flex-start" }}>
+                            <span style={{ fontSize:18,flexShrink:0 }}>{ins.icon}</span>
+                            <div>
+                              <div style={{ fontSize:13,color:"#3b0764",lineHeight:1.4,marginBottom:4 }}>{ins.obs}</div>
+                              <div style={{ fontSize:12,color:"#6b21a8",lineHeight:1.4,fontStyle:"italic" }}>{ins.rec}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
