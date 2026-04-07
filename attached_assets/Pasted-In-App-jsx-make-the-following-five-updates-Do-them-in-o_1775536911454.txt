@@ -1,0 +1,55 @@
+In App.jsx, make the following five updates. Do them in order. Do not change any existing logic, data structures, API calls, or styling constants unless explicitly instructed below.
+
+1. MOBILE RESPONSIVENESS FIXES
+Add a useEffect at the top of the App component that sets a isMobile state variable: const [isMobile, setIsMobile] = useState(window.innerWidth < 640). Add a resize listener that updates it when the window resizes. Then apply these fixes using isMobile conditionally in inline styles:
+
+Tab navigation bar: add overflowX: 'auto', WebkitOverflowScrolling: 'touch', flexWrap: 'nowrap' on mobile so tabs scroll horizontally without wrapping
+Floating buttons: on mobile set both the Quick Log button and the Chat button to width: 48, height: 48, bottom: 16. Set Quick Log to left: 12 and Chat to right: 12 so they do not overlap
+Modals (modal-box class): on mobile override to width: '100%', maxWidth: '100%', borderRadius: '20px 20px 0 0', position: 'fixed', bottom: 0, margin: 0 so they appear as bottom sheets
+Patient detail header button row: on mobile add flexWrap: 'wrap', gap: 8 so the Log Visit button wraps to a second line instead of overflowing
+Stats grid: confirm the existing .stats-grid media query in the css string targets max-width: 768px and sets grid-template-columns: repeat(2, 1fr). If it does not, fix it.
+Page inner padding: on mobile reduce to padding: '20px 12px'
+
+
+2. GRADUATION GOALS THREE-SECTION CLEANUP
+In the Requirements tab (tab === "requirements"), find the section that maps customGoals.filter(g => g.visible) and renders goal cards. Replace the flat list with three labeled sections rendered in this order:
+
+Complete — goals where completed >= goal.required
+Needs Cases — goals where completed > 0 && completed < goal.required
+Not Started — goals where completed === 0
+
+Add a showAllGoals state variable (default false). When showAllGoals is false, hide the Not Started section entirely. Add a toggle button below the Needs Cases section that says "Show Not Started (N)" where N is the count — clicking it sets showAllGoals to true. When true, show all three sections and change the button to "Hide Not Started".
+Each section should have a header styled like this: a small uppercase label in NYU.gray400 with the section name and count in parentheses, e.g. "✓ COMPLETE (3)". Add marginTop: 24, marginBottom: 12 between sections. Keep all existing goal card UI identical — just group them.
+
+3. SETTINGS MODAL REORGANIZATION
+In the Settings modal, add a settingsTab state variable with options: 'profile', 'schedule', 'rotations', 'appearance', 'activity'. Default to 'profile'.
+Add a horizontal tab row at the top of the settings modal content (below the header) with five pill buttons for: Profile, Schedule, Rotations, Appearance, Activity. Style the active tab with background: T.purple, color: 'white' and inactive with background: NYU.gray100, color: NYU.gray600. Use the existing .pill-btn class.
+Then show only the relevant content based on settingsTab:
+
+'profile': show Profile section + Graduation date + Demo data block
+'schedule': show Clinic Schedule section only
+'rotations': show Clinical Rotations section only
+'appearance': show Color Theme + Tab Order + Dashboard Stats sections
+'activity': show Activity Log section only
+
+Keep all existing content and logic inside each section identical — only reorganize which section appears under which tab. The Save Changes and Cancel buttons stay at the bottom always visible regardless of which tab is active.
+
+4. ADD PATIENT MODAL FIELD ALIGNMENT
+In the Add Patient modal (showAddModal), add the following fields after the existing Discipline selector and before the First Procedure field:
+
+Patient Type — a pill button selector with three options: 'In-Clinic', 'Outreach', 'External'. Store in newPatient.patientType. Default to 'In-Clinic'. Style active pill with background: T.purple, color: 'white', inactive with background: NYU.gray100, color: NYU.gray600.
+Referring Faculty — a text input, label "Referring Faculty", placeholder "e.g. Dr. Chen", optional. Store in newPatient.referringFaculty.
+Treatment Phase — a dropdown select using the existing PHASE_KEYS array and TREATMENT_PHASES object for labels. Store in newPatient.treatmentPhase. Default to 'IV'.
+
+Make sure all three fields are included in the emptyPatient object if they are not already: patientType: 'In-Clinic', referringFaculty: '', treatmentPhase: 'IV'.
+
+5. ERROR TOAST SYSTEM
+Add a global error toast to the app. Add state: const [errorToast, setErrorToast] = useState(''). Add a helper function showError(msg) that sets errorToast to msg and automatically clears it after 4000ms using setTimeout.
+Render the toast as a fixed element at position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)', zIndex: 9999 only when errorToast is non-empty. Style it as a red pill: background: '#dc2626', color: 'white', borderRadius: 99, padding: '10px 20px', fontSize: 13, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,0.2)', whiteSpace: 'nowrap'. Add a fade-in using the existing fadeIn keyframe.
+Then replace the following silent error patterns with showError(...) calls:
+
+In addPatient: replace setAddPatientError(data.error || "Failed to add patient...") with both setting the inline error AND calling showError(data.error || "Failed to add patient")
+In logVisit: in the catch block call showError("Failed to save visit — please try again")
+In loadUserData: in the catch block call showError("Connection error — some data may not have loaded")
+In sendChat: in the catch block call showError("Assistant unavailable — please try again")
+In the settings save block: in the catch block call showError("Settings could not be saved — check your connection")

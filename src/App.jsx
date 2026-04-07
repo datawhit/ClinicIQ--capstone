@@ -561,6 +561,7 @@ const emptyPatient = {
   handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
   patientLanguage:"English",
   isPrimaryProvider:true, sharedWithD3:false,
+  patientType:"In-Clinic", referringFaculty:"",
   // Predictive Nudge & Phase
   treatmentPhase:"IV",
   // Specialty Referral
@@ -684,7 +685,8 @@ const css = `
     .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
     .insights-grid { grid-template-columns: 1fr !important; }
     .page-header { flex-direction: column; align-items: flex-start !important; gap: 12px; }
-    .modal-box { padding: 20px !important; width: 95% !important; }
+    .modal-overlay { align-items: flex-end !important; }
+    .modal-box { padding: 20px !important; width: 100% !important; max-width: 100% !important; border-radius: 20px 20px 0 0 !important; margin: 0 !important; max-height: 90vh !important; overflow-y: auto !important; }
     .page-inner { padding: 16px 12px 100px !important; }
     .filter-row { overflow-x: auto; padding-bottom: 4px; flex-wrap: nowrap !important; }
     .tab-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap !important; scroll-behavior: smooth; padding-bottom: 1px; }
@@ -816,6 +818,15 @@ export default function App() {
   const [showAllGoals, setShowAllGoals] = useState(false);
   const [collapsedGoalGroups, setCollapsedGoalGroups] = useState({});
   const [onboardingStep, setOnboardingStep] = useState(null); // 1–4 or null
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  const [settingsTab, setSettingsTab] = useState("profile");
+  const [errorToast, setErrorToast] = useState("");
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // ── Theme ─────────────────────────────────────────────────────────────────────
   const T = { ...NYU, ...(THEMES[themePreset] || THEMES["nyu-purple"]) };
@@ -852,6 +863,7 @@ export default function App() {
       return pData;
     } catch (err) {
       console.error("Failed to load data:", err);
+      showError("Connection error — some data may not have loaded");
       return [];
     }
   }, []);
@@ -908,6 +920,7 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) {
         setAddPatientError(data.error || "Failed to add patient. Please try again.");
+        showError(data.error || "Failed to add patient.");
         return;
       }
       setPatients(prev => [...prev, data]);
@@ -918,6 +931,7 @@ export default function App() {
     } catch (err) {
       console.error("Add patient failed:", err);
       setAddPatientError("Connection error. Please try again.");
+      showError("Connection error — patient not saved.");
     }
   };
 
@@ -948,6 +962,11 @@ export default function App() {
     }).catch(()=>{});
   };
 
+  const showError = (msg) => {
+    setErrorToast(msg);
+    setTimeout(() => setErrorToast(""), 4000);
+  };
+
   const logVisit = async (id) => {
     if (!newVisit.date || !newVisit.procedure) return;
     try {
@@ -965,7 +984,7 @@ export default function App() {
           } : p
         ));
       }
-    } catch (err) { console.error("Log visit failed:", err); }
+    } catch (err) { console.error("Log visit failed:", err); showError("Connection error — visit not saved."); }
     setNewVisit({ date:"", procedure:"", notes:"", nextAppt:"", cdtCode:"", facultyName:"" });
     setNlpInput(""); setNlpParsed(null); setNlpError("");
     setShowLogModal(null);
@@ -1109,6 +1128,7 @@ RESPONSE RULES:
       setChatMessages(prev=>[...prev,{ role:"assistant", content:cleanText, action }]);
     } catch(err) {
       setChatMessages(prev=>[...prev,{ role:"assistant", content:"Sorry, I had trouble connecting. Please try again." }]);
+      showError("AI connection error — please retry.");
     }
     setChatLoading(false);
   };
@@ -1395,7 +1415,7 @@ RESPONSE RULES:
                       </button>
                     ))}
                     <div style={{ height:1, background:NYU.gray100, margin:"4px 12px" }}/>
-                    <button onClick={()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setShowSettings(true); setMenuOpen(false); }}
+                    <button onClick={()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setSettingsTab("profile"); setShowSettings(true); setMenuOpen(false); }}
                       style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.gray900, fontFamily:"'Inter', sans-serif", textAlign:"left" }}
                       onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
                       <span style={{ fontSize:15 }}>⚙️</span>Settings
@@ -1411,7 +1431,7 @@ RESPONSE RULES:
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <span className="top-bar-name" style={{ fontSize:13, color:NYU.gray400 }}>{user?.year} · {user?.name}</span>
-              <button onClick={()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setShowSettings(true); }} style={{ background:"none", border:"none", cursor:"pointer", padding:6, borderRadius:8, color:NYU.gray400, fontSize:16 }}>⚙️</button>
+              <button onClick={()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setSettingsTab("profile"); setShowSettings(true); }} style={{ background:"none", border:"none", cursor:"pointer", padding:6, borderRadius:8, color:NYU.gray400, fontSize:16 }}>⚙️</button>
               <button onClick={handleLogout} style={{ background:NYU.gray100, border:"none", borderRadius:99, padding:"5px 14px", cursor:"pointer", color:NYU.gray600, fontSize:12, fontWeight:600, fontFamily:"'Inter', sans-serif" }}>Sign Out</button>
               <div style={{ width:32, height:32, borderRadius:"50%", background:T.lavender, display:"flex", alignItems:"center", justifyContent:"center" }}>
                 <span style={{ color:T.purple, fontSize:13, fontWeight:700 }}>{user?.name?.[0]||"?"}</span>
@@ -2265,8 +2285,8 @@ RESPONSE RULES:
               )}
 
               {!editingGoals&&(()=>{
-                const goalsToShow = showAllGoals ? customGoals : customGoals.filter(g=>g.visible);
-                const allGroupDisciplines = Object.values(DISCIPLINE_GROUPS).flat();
+                const visibleGoals = customGoals.filter(g=>g.visible);
+                const getCompleted = (goal) => patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
                 const renderGoalCard = (goal) => {
                   const primaryPatients=patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider!==false);
                   const supportingPatients=patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider===false);
@@ -2277,8 +2297,7 @@ RESPONSE RULES:
                   const color=pct>=100?NYU.green:pct>=60?NYU.blue:pct>=30?NYU.amber:NYU.red;
                   const qualifyingPatients=primaryPatients.filter(p=>!p.treatmentComplete);
                   return (
-                    <div key={goal.discipline} className="card" style={{ padding:"14px 18px",opacity:goal.visible?1:0.6 }}>
-                      {!goal.visible&&<div style={{ fontSize:10,fontWeight:600,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:4 }}>Hidden</div>}
+                    <div key={goal.discipline} className="card" style={{ padding:"14px 18px" }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
                         <span style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>{goal.discipline}</span>
                         <div style={{ display:"flex",alignItems:"center",gap:8 }}>
@@ -2301,68 +2320,41 @@ RESPONSE RULES:
                     </div>
                   );
                 };
-                const hiddenCount = customGoals.filter(g=>!g.visible).length;
+                const complete = visibleGoals.filter(g=>getCompleted(g)>=g.required);
+                const needsCases = visibleGoals.filter(g=>getCompleted(g)>0&&getCompleted(g)<g.required);
+                const notStarted = visibleGoals.filter(g=>getCompleted(g)===0);
+                const sectionHeader = (label, count, color) => (
+                  <div style={{ fontSize:11,fontWeight:700,color:color||NYU.gray400,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",alignItems:"center",gap:6 }}>
+                    {label} <span style={{ background:(color||NYU.gray400)+"22",color:color||NYU.gray400,borderRadius:99,padding:"1px 8px",fontSize:10 }}>({count})</span>
+                  </div>
+                );
                 return (
-                  <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                    <div style={{ display:"flex",justifyContent:"flex-end" }}>
-                      {hiddenCount>0&&(
-                        <button onClick={()=>setShowAllGoals(v=>!v)} style={{ background:"none",border:`1px solid ${NYU.gray200}`,cursor:"pointer",fontSize:12,color:T.purple,fontFamily:"'Inter',sans-serif",fontWeight:600,padding:"5px 12px",borderRadius:99,display:"flex",alignItems:"center",gap:4 }}>
-                          {showAllGoals ? "Show visible only" : `Show all (${hiddenCount} hidden)`}
+                  <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
+                    {needsCases.length>0&&(
+                      <div style={{ marginTop:8,marginBottom:24 }}>
+                        {sectionHeader("Needs Cases", needsCases.length, NYU.amber)}
+                        <div style={{ display:"flex",flexDirection:"column",gap:8 }}>{needsCases.map(renderGoalCard)}</div>
+                      </div>
+                    )}
+                    {complete.length>0&&(
+                      <div style={{ marginTop:needsCases.length>0?0:8,marginBottom:24 }}>
+                        {sectionHeader("✓ Complete", complete.length, NYU.green)}
+                        <div style={{ display:"flex",flexDirection:"column",gap:8 }}>{complete.map(renderGoalCard)}</div>
+                      </div>
+                    )}
+                    {showAllGoals&&notStarted.length>0&&(
+                      <div style={{ marginTop:0,marginBottom:24 }}>
+                        {sectionHeader("Not Started", notStarted.length, NYU.gray400)}
+                        <div style={{ display:"flex",flexDirection:"column",gap:8 }}>{notStarted.map(renderGoalCard)}</div>
+                      </div>
+                    )}
+                    {notStarted.length>0&&(
+                      <div style={{ display:"flex",justifyContent:"center",marginBottom:8 }}>
+                        <button onClick={()=>setShowAllGoals(v=>!v)} style={{ background:"none",border:`1px solid ${NYU.gray200}`,cursor:"pointer",fontSize:12,color:T.purple,fontFamily:"'Inter',sans-serif",fontWeight:600,padding:"5px 14px",borderRadius:99 }}>
+                          {showAllGoals?"Hide Not Started":`Show Not Started (${notStarted.length})`}
                         </button>
-                      )}
-                    </div>
-                    {Object.entries(DISCIPLINE_GROUPS).map(([groupName, groupDisciplines]) => {
-                      const groupGoals = goalsToShow.filter(g=>groupDisciplines.includes(g.discipline));
-                      if (groupGoals.length === 0) return null;
-                      const isCollapsed = collapsedGoalGroups[groupName];
-                      const groupDone = groupGoals.filter(g => {
-                        const pv = patients.filter(p=>p.discipline===g.discipline&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
-                        return pv >= g.required;
-                      }).length;
-                      return (
-                        <div key={groupName}>
-                          <button className="goal-group-header" onClick={()=>setCollapsedGoalGroups(prev=>({...prev,[groupName]:!prev[groupName]}))}
-                            style={{ width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",background:NYU.gray100,borderRadius:12,border:"none",cursor:"pointer",fontFamily:"'Inter',sans-serif",marginBottom:isCollapsed?0:8,transition:"all 0.15s" }}>
-                            <span style={{ fontWeight:700,fontSize:13,color:NYU.gray900 }}>{groupName}</span>
-                            <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                              <span style={{ fontSize:12,color:groupDone===groupGoals.length?NYU.green:NYU.gray400,fontWeight:600 }}>{groupDone}/{groupGoals.length} complete</span>
-                              <span style={{ fontSize:12,color:NYU.gray600,transition:"transform 0.2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)" }}>▼</span>
-                            </div>
-                          </button>
-                          {!isCollapsed&&(
-                            <div style={{ display:"flex",flexDirection:"column",gap:8,paddingLeft:4,paddingRight:4 }}>
-                              {groupGoals.map(renderGoalCard)}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {(()=>{
-                      const ungrouped = goalsToShow.filter(g=>!allGroupDisciplines.includes(g.discipline));
-                      if (ungrouped.length === 0) return null;
-                      const isCollapsed = collapsedGoalGroups["__custom__"];
-                      const customDone = ungrouped.filter(g => {
-                        const pv = patients.filter(p=>p.discipline===g.discipline&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
-                        return pv >= g.required;
-                      }).length;
-                      return (
-                        <div key="custom">
-                          <button className="goal-group-header" onClick={()=>setCollapsedGoalGroups(prev=>({...prev,__custom__:!prev.__custom__}))}
-                            style={{ width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",background:NYU.gray100,borderRadius:12,border:"none",cursor:"pointer",fontFamily:"'Inter',sans-serif",marginBottom:isCollapsed?0:8,transition:"all 0.15s" }}>
-                            <span style={{ fontWeight:700,fontSize:13,color:NYU.gray900 }}>Custom Goals</span>
-                            <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                              <span style={{ fontSize:12,color:customDone===ungrouped.length?NYU.green:NYU.gray400,fontWeight:600 }}>{customDone}/{ungrouped.length} complete</span>
-                              <span style={{ fontSize:12,color:NYU.gray600,transition:"transform 0.2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)" }}>▼</span>
-                            </div>
-                          </button>
-                          {!isCollapsed&&(
-                            <div style={{ display:"flex",flexDirection:"column",gap:8,paddingLeft:4,paddingRight:4 }}>
-                              {ungrouped.map(renderGoalCard)}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -2536,6 +2528,19 @@ RESPONSE RULES:
                 <input style={{ ...inputStyle, borderColor: addPatientError&&!newPatient.chartNumber.trim() ? NYU.red : undefined }} placeholder="e.g. 1047823" value={newPatient.chartNumber} onChange={e=>{ setNewPatient(p=>({...p,chartNumber:e.target.value})); setAddPatientError(""); }}/>
               </div>
               <div><label style={labelStyle}>Clinical Discipline</label><select style={inputStyle} value={newPatient.discipline} onChange={e=>setNewPatient(p=>({...p,discipline:e.target.value}))}>{DISCIPLINES.map(d=><option key={d} value={d}>{d}</option>)}</select></div>
+              <div>
+                <label style={labelStyle}>Patient Type</label>
+                <div style={{ display:"flex",gap:6 }}>
+                  {["In-Clinic","Outreach","External"].map(opt=>(
+                    <button key={opt} type="button" onClick={()=>setNewPatient(p=>({...p,patientType:opt}))}
+                      style={{ flex:1,padding:"7px 0",borderRadius:99,fontSize:12,fontWeight:600,cursor:"pointer",border:"none",fontFamily:"'Inter',sans-serif",background:newPatient.patientType===opt?T.purple:NYU.gray100,color:newPatient.patientType===opt?"white":NYU.gray600,transition:"all 0.15s" }}>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div><label style={labelStyle}>Referring Faculty <span style={{ fontWeight:400,color:NYU.gray400 }}>(optional)</span></label><input style={inputStyle} placeholder="e.g. Dr. Chen" value={newPatient.referringFaculty||""} onChange={e=>setNewPatient(p=>({...p,referringFaculty:e.target.value}))}/></div>
+              <div><label style={labelStyle}>Treatment Phase</label><select style={inputStyle} value={newPatient.treatmentPhase} onChange={e=>setNewPatient(p=>({...p,treatmentPhase:e.target.value}))}>{PHASE_KEYS.map(k=><option key={k} value={k}>Phase {k} — {TREATMENT_PHASES[k]?.label||k}</option>)}</select></div>
               <div><label style={labelStyle}>First Procedure</label><input style={inputStyle} placeholder="e.g. Initial Exam..." value={newPatient.procedure} onChange={e=>setNewPatient(p=>({...p,procedure:e.target.value}))}/></div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
                 <div><label style={labelStyle}>Treatment Start</label><input type="date" style={inputStyle} value={newPatient.treatmentStart} onChange={e=>setNewPatient(p=>({...p,treatmentStart:e.target.value,lastVisit:e.target.value}))}/></div>
@@ -3561,179 +3566,195 @@ RESPONSE RULES:
               <div><h2 style={{ fontSize:18,fontWeight:700,color:NYU.gray900,fontFamily:"'Fraunces', serif" }}>Settings</h2><p style={{ fontSize:12,color:NYU.gray400,marginTop:3 }}>Personalize your ClinIQ experience</p></div>
               <button onClick={()=>setShowSettings(false)} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:NYU.gray400 }}>×</button>
             </div>
+            {/* Settings tab row */}
+            <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:20 }}>
+              {[["profile","Profile"],["schedule","Schedule"],["rotations","Rotations"],["appearance","Appearance"],["activity","Activity"]].map(([key,label])=>(
+                <button key={key} onClick={()=>setSettingsTab(key)}
+                  style={{ padding:"5px 14px",borderRadius:99,fontSize:12,fontWeight:600,cursor:"pointer",border:"none",fontFamily:"'Inter',sans-serif",background:settingsTab===key?T.purple:NYU.gray100,color:settingsTab===key?"white":NYU.gray600,transition:"all 0.15s" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
-              <div style={{ background:T.lavender,borderRadius:14,padding:"16px 18px" }}>
-                <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Profile</div>
-                <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-                  <div><label style={labelStyle}>Full Name</label><input style={inputStyle} value={settingsDraft.name} onChange={e=>setSettingsDraft(p=>({...p,name:e.target.value}))}/></div>
-                  <div><label style={labelStyle}>Student Year</label><select style={inputStyle} value={settingsDraft.year} onChange={e=>setSettingsDraft(p=>({...p,year:e.target.value}))}><option>D3</option><option>D4</option><optgroup label="Post-Graduate Residents"><option>GPR Resident</option><option>OMFS Resident</option><option>Periodontics Resident</option><option>Endodontics Resident</option><option>Prosthodontics Resident</option><option>Orthodontics Resident</option><option>Pediatric Dentistry Resident</option></optgroup></select></div>
+              {/* ── Profile tab ── */}
+              {settingsTab==="profile"&&(<>
+                <div style={{ background:T.lavender,borderRadius:14,padding:"16px 18px" }}>
+                  <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Profile</div>
+                  <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                    <div><label style={labelStyle}>Full Name</label><input style={inputStyle} value={settingsDraft.name} onChange={e=>setSettingsDraft(p=>({...p,name:e.target.value}))}/></div>
+                    <div><label style={labelStyle}>Student Year</label><select style={inputStyle} value={settingsDraft.year} onChange={e=>setSettingsDraft(p=>({...p,year:e.target.value}))}><option>D3</option><option>D4</option><optgroup label="Post-Graduate Residents"><option>GPR Resident</option><option>OMFS Resident</option><option>Periodontics Resident</option><option>Endodontics Resident</option><option>Prosthodontics Resident</option><option>Orthodontics Resident</option><option>Pediatric Dentistry Resident</option></optgroup></select></div>
+                  </div>
                 </div>
-              </div>
-              <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Graduation</div>
-                <div><label style={labelStyle}>Expected Graduation Date</label><input type="date" style={inputStyle} value={settingsDraft.graduationDate} onChange={e=>setSettingsDraft(p=>({...p,graduationDate:e.target.value}))}/></div>
-              </div>
-              <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4 }}>Clinic Schedule</div>
-                <div style={{ fontSize:12,color:NYU.gray400,marginBottom:14 }}>Set which days you have clinic and your hours.</div>
-                <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                  {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(day=>{
-                    const sched=settingsDraft.clinicSchedule?.[day]||{ enabled:false,start:"09:00",end:"17:00" };
-                    return (
-                      <div key={day} style={{ display:"flex",alignItems:"center",gap:10 }}>
-                        <div onClick={()=>setSettingsDraft(p=>({ ...p,clinicSchedule:{ ...p.clinicSchedule,[day]:{ ...sched,enabled:!sched.enabled } } }))} style={{ width:36,height:20,borderRadius:99,background:sched.enabled?T.purple:NYU.gray200,cursor:"pointer",position:"relative",flexShrink:0,transition:"background 0.2s" }}>
-                          <div style={{ position:"absolute",top:2,left:sched.enabled?18:2,width:16,height:16,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
-                        </div>
-                        <span style={{ fontSize:13,fontWeight:600,color:sched.enabled?NYU.gray900:NYU.gray400,width:90,textTransform:"capitalize" }}>{day}</span>
-                        {sched.enabled?(
-                          <div style={{ display:"flex",alignItems:"center",gap:6,flex:1 }}>
-                            <input type="time" value={sched.start} onChange={e=>setSettingsDraft(p=>({ ...p,clinicSchedule:{ ...p.clinicSchedule,[day]:{ ...sched,start:e.target.value } } }))} style={{ ...inputStyle,padding:"5px 8px",fontSize:12,flex:1 }}/>
-                            <span style={{ fontSize:12,color:NYU.gray400 }}>to</span>
-                            <input type="time" value={sched.end} onChange={e=>setSettingsDraft(p=>({ ...p,clinicSchedule:{ ...p.clinicSchedule,[day]:{ ...sched,end:e.target.value } } }))} style={{ ...inputStyle,padding:"5px 8px",fontSize:12,flex:1 }}/>
-                          </div>
-                        ):<span style={{ fontSize:12,color:NYU.gray200,fontStyle:"italic" }}>No clinic</span>}
-                      </div>
-                    );
-                  })}
+                <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
+                  <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Graduation</div>
+                  <div><label style={labelStyle}>Expected Graduation Date</label><input type="date" style={inputStyle} value={settingsDraft.graduationDate} onChange={e=>setSettingsDraft(p=>({...p,graduationDate:e.target.value}))}/></div>
                 </div>
-              </div>
-              {/* Rotations */}
-              <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4 }}>
-                  <div style={{ fontSize:11,fontWeight:700,color:ROTATION_COLOR,textTransform:"uppercase",letterSpacing:"0.07em" }}>Clinical Rotations</div>
-                  <button onClick={()=>{
-                    const newR = { id:`r${Date.now()}`,site:"",type:"Hospital Dentistry",startDate:"",endDate:"",recurring:false,recurringDay:"monday",notes:"",color:ROTATION_COLOR };
-                    setRotations(prev=>[...prev,newR]);
-                  }} style={{ background:"#ecfeff",border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600,color:ROTATION_COLOR,fontFamily:"'Inter', sans-serif" }}>+ Add Rotation</button>
+                <div style={{ background:"#fef9c3",borderRadius:14,padding:"16px 18px",border:"1px solid #fde047" }}>
+                  <div style={{ fontSize:11,fontWeight:700,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10 }}>Demo Data</div>
+                  <div style={{ fontSize:12,color:"#78350f",marginBottom:12,lineHeight:1.5 }}>
+                    Load 8 sample patients across all disciplines — complete with visit history, lab status, pre-auth data, and paired providers. Also loads 2 rotations and 3 notebook entries.<br/>
+                    <strong style={{ color:"#b45309" }}>⚠ This will replace all your current patients, rotations, and notes.</strong>
+                  </div>
+                  <button className="action-btn" onClick={loadDemoData} disabled={demoSeeding}
+                    style={{ background:"#92400e",color:"white",fontSize:13,width:"100%" }}>
+                    {demoSeeding ? "Loading demo data…" : "🎓 Load Demo Caseload"}
+                  </button>
                 </div>
-                <div style={{ fontSize:12,color:NYU.gray400,marginBottom:14 }}>Track external rotation sites — these appear as teal blocks on your calendar.</div>
+                <div style={{ background:NYU.gray50,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                  <div><div style={{ fontSize:13,fontWeight:600,color:NYU.gray900 }}>ClinIQ</div><div style={{ fontSize:11,color:NYU.gray400,marginTop:2 }}>NYU College of Dentistry · v1.1</div></div>
+                  <div style={{ width:36,height:36,borderRadius:10,background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`,display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ color:"white",fontSize:16,fontWeight:700 }}>C</span></div>
+                </div>
+              </>)}
 
-                {rotations.length===0&&(
-                  <div style={{ fontSize:12,color:NYU.gray400,fontStyle:"italic",textAlign:"center",padding:"12px 0" }}>No rotations added yet.</div>
-                )}
-
-                <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-                  {rotations.map((r,idx)=>(
-                    <div key={r.id} style={{ background:NYU.gray50,borderRadius:12,padding:"12px 14px",border:`1px solid #a5f3fc` }}>
-                      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
-                        <span style={{ fontSize:12,fontWeight:600,color:ROTATION_COLOR }}>Rotation {idx+1}</span>
-                        <button onClick={()=>setConfirmDelete({ message:`Remove rotation at ${r.site||"this site"}?`, onConfirm:()=>{ logChange({ action_type:"ROTATION_REMOVED",patient_alias:"",description:`Removed rotation at ${r.site||"unknown site"}` }); setRotations(prev=>prev.filter(x=>x.id!==r.id)); } })} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter', sans-serif" }}>Remove</button>
-                      </div>
-                      <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                        <div><label style={labelStyle}>Site Name</label><input style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} placeholder="e.g. Bellevue Hospital" value={r.site} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,site:e.target.value}:x))}/></div>
-                        <div><label style={labelStyle}>Rotation Type</label>
-                          <select style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} value={r.type} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,type:e.target.value}:x))}>
-                            {ROTATION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-                          </select>
-                        </div>
-                        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-                          <div><label style={labelStyle}>Start Date</label><input type="date" style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} value={r.startDate} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,startDate:e.target.value}:x))}/></div>
-                          <div><label style={labelStyle}>End Date</label><input type="date" style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} value={r.endDate} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,endDate:e.target.value}:x))}/></div>
-                        </div>
-                        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                          <div onClick={()=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,recurring:!x.recurring}:x))}
-                            style={{ width:36,height:20,borderRadius:99,background:r.recurring?ROTATION_COLOR:NYU.gray200,cursor:"pointer",position:"relative",flexShrink:0,transition:"background 0.2s" }}>
-                            <div style={{ position:"absolute",top:2,left:r.recurring?18:2,width:16,height:16,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
-                          </div>
-                          <span style={{ fontSize:12,color:NYU.gray600 }}>Recurring</span>
-                          {r.recurring&&(
-                            <select style={{ ...inputStyle,fontSize:12,padding:"5px 8px",flex:1 }} value={r.recurringDay} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,recurringDay:e.target.value}:x))}>
-                              {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(d=><option key={d} value={d}>{d.charAt(0).toUpperCase()+d.slice(1)}</option>)}
-                            </select>
-                          )}
-                        </div>
-                        <div><label style={labelStyle}>Notes</label><input style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} placeholder="Supervisor, address, what to bring..." value={r.notes} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,notes:e.target.value}:x))}/></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── Activity Log ── */}
-              <div style={{ background:NYU.gray50,borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
-                  <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em" }}>Activity Log</div>
-                  {changelog.length>10&&<button onClick={()=>setChangelogExpanded(v=>!v)} style={{ background:"none",border:"none",fontSize:12,color:T.purple,cursor:"pointer",fontFamily:"'Inter', sans-serif" }}>{changelogExpanded?"Show less":"View all"}</button>}
-                </div>
-                {changelog.length===0?(
-                  <div style={{ fontSize:13,color:NYU.gray400,textAlign:"center",padding:"12px 0" }}>No activity yet.</div>
-                ):(
+              {/* ── Schedule tab ── */}
+              {settingsTab==="schedule"&&(
+                <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
+                  <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4 }}>Clinic Schedule</div>
+                  <div style={{ fontSize:12,color:NYU.gray400,marginBottom:14 }}>Set which days you have clinic and your hours.</div>
                   <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                    {(changelogExpanded?changelog:changelog.slice(0,10)).map((entry,i)=>{
-                      const ICONS={PATIENT_ADDED:"👤",VISIT_LOGGED:"📋",PATIENT_DELETED:"🗑",VISIT_DELETED:"🗑",NOTE_DELETED:"🗑",APPT_REMOVED:"📅",ROTATION_REMOVED:"🔄",TREATMENT_COMPLETE:"✅",PREAUTH_UPDATED:"📄",LAB_UPDATED:"🧪"};
-                      const icon=ICONS[entry.action_type]||"•";
-                      const ts=new Date(entry.timestamp).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+                    {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(day=>{
+                      const sched=settingsDraft.clinicSchedule?.[day]||{ enabled:false,start:"09:00",end:"17:00" };
                       return (
-                        <div key={i} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
-                          <span style={{ fontSize:14,flexShrink:0 }}>{icon}</span>
-                          <div style={{ flex:1,minWidth:0 }}>
-                            <div style={{ fontSize:12,color:NYU.gray700||NYU.gray600,lineHeight:1.4 }}>{entry.description}</div>
-                            <div style={{ fontSize:11,color:NYU.gray400,marginTop:2 }}>{ts}</div>
+                        <div key={day} style={{ display:"flex",alignItems:"center",gap:10 }}>
+                          <div onClick={()=>setSettingsDraft(p=>({ ...p,clinicSchedule:{ ...p.clinicSchedule,[day]:{ ...sched,enabled:!sched.enabled } } }))} style={{ width:36,height:20,borderRadius:99,background:sched.enabled?T.purple:NYU.gray200,cursor:"pointer",position:"relative",flexShrink:0,transition:"background 0.2s" }}>
+                            <div style={{ position:"absolute",top:2,left:sched.enabled?18:2,width:16,height:16,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
                           </div>
+                          <span style={{ fontSize:13,fontWeight:600,color:sched.enabled?NYU.gray900:NYU.gray400,width:90,textTransform:"capitalize" }}>{day}</span>
+                          {sched.enabled?(
+                            <div style={{ display:"flex",alignItems:"center",gap:6,flex:1 }}>
+                              <input type="time" value={sched.start} onChange={e=>setSettingsDraft(p=>({ ...p,clinicSchedule:{ ...p.clinicSchedule,[day]:{ ...sched,start:e.target.value } } }))} style={{ ...inputStyle,padding:"5px 8px",fontSize:12,flex:1 }}/>
+                              <span style={{ fontSize:12,color:NYU.gray400 }}>to</span>
+                              <input type="time" value={sched.end} onChange={e=>setSettingsDraft(p=>({ ...p,clinicSchedule:{ ...p.clinicSchedule,[day]:{ ...sched,end:e.target.value } } }))} style={{ ...inputStyle,padding:"5px 8px",fontSize:12,flex:1 }}/>
+                            </div>
+                          ):<span style={{ fontSize:12,color:NYU.gray200,fontStyle:"italic" }}>No clinic</span>}
                         </div>
                       );
                     })}
                   </div>
-                )}
-              </div>
-
-              {/* ── Demo Data ── */}
-              <div style={{ background:"#fef9c3",borderRadius:14,padding:"16px 18px",border:"1px solid #fde047" }}>
-                <div style={{ fontSize:11,fontWeight:700,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10 }}>Demo Data</div>
-                <div style={{ fontSize:12,color:"#78350f",marginBottom:12,lineHeight:1.5 }}>
-                  Load 8 sample patients across all disciplines — complete with visit history, lab status, pre-auth data, and paired providers. Also loads 2 rotations and 3 notebook entries.<br/>
-                  <strong style={{ color:"#b45309" }}>⚠ This will replace all your current patients, rotations, and notes.</strong>
                 </div>
-                <button className="action-btn" onClick={loadDemoData} disabled={demoSeeding}
-                  style={{ background:"#92400e",color:"white",fontSize:13,width:"100%" }}>
-                  {demoSeeding ? "Loading demo data…" : "🎓 Load Demo Caseload"}
-                </button>
-              </div>
+              )}
 
-              {/* ── Appearance ── */}
-              <div style={{ background:NYU.gray50,borderRadius:14,padding:"16px 18px" }}>
-                <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Appearance</div>
-
-                <div style={{ marginBottom:16 }}>
-                  <div style={{ fontSize:12,fontWeight:600,color:NYU.gray600,marginBottom:8 }}>Color Theme</div>
-                  <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-                    {Object.entries(THEMES).map(([key,th])=>(
-                      <button key={key} onClick={()=>setThemePreset(key)} title={th.name}
-                        style={{ width:32,height:32,borderRadius:99,background:th.purple,border:themePreset===key?`3px solid ${NYU.gray900}`:"3px solid transparent",cursor:"pointer",fontSize:14,transition:"all 0.15s",outline:"none" }}
-                      >{themePreset===key?"✓":""}</button>
+              {/* ── Rotations tab ── */}
+              {settingsTab==="rotations"&&(
+                <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4 }}>
+                    <div style={{ fontSize:11,fontWeight:700,color:ROTATION_COLOR,textTransform:"uppercase",letterSpacing:"0.07em" }}>Clinical Rotations</div>
+                    <button onClick={()=>{
+                      const newR = { id:`r${Date.now()}`,site:"",type:"Hospital Dentistry",startDate:"",endDate:"",recurring:false,recurringDay:"monday",notes:"",color:ROTATION_COLOR };
+                      setRotations(prev=>[...prev,newR]);
+                    }} style={{ background:"#ecfeff",border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600,color:ROTATION_COLOR,fontFamily:"'Inter', sans-serif" }}>+ Add Rotation</button>
+                  </div>
+                  <div style={{ fontSize:12,color:NYU.gray400,marginBottom:14 }}>Track external rotation sites — these appear as teal blocks on your calendar.</div>
+                  {rotations.length===0&&(
+                    <div style={{ fontSize:12,color:NYU.gray400,fontStyle:"italic",textAlign:"center",padding:"12px 0" }}>No rotations added yet.</div>
+                  )}
+                  <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                    {rotations.map((r,idx)=>(
+                      <div key={r.id} style={{ background:NYU.gray50,borderRadius:12,padding:"12px 14px",border:`1px solid #a5f3fc` }}>
+                        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
+                          <span style={{ fontSize:12,fontWeight:600,color:ROTATION_COLOR }}>Rotation {idx+1}</span>
+                          <button onClick={()=>setConfirmDelete({ message:`Remove rotation at ${r.site||"this site"}?`, onConfirm:()=>{ logChange({ action_type:"ROTATION_REMOVED",patient_alias:"",description:`Removed rotation at ${r.site||"unknown site"}` }); setRotations(prev=>prev.filter(x=>x.id!==r.id)); } })} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter', sans-serif" }}>Remove</button>
+                        </div>
+                        <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                          <div><label style={labelStyle}>Site Name</label><input style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} placeholder="e.g. Bellevue Hospital" value={r.site} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,site:e.target.value}:x))}/></div>
+                          <div><label style={labelStyle}>Rotation Type</label>
+                            <select style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} value={r.type} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,type:e.target.value}:x))}>
+                              {ROTATION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+                            <div><label style={labelStyle}>Start Date</label><input type="date" style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} value={r.startDate} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,startDate:e.target.value}:x))}/></div>
+                            <div><label style={labelStyle}>End Date</label><input type="date" style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} value={r.endDate} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,endDate:e.target.value}:x))}/></div>
+                          </div>
+                          <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                            <div onClick={()=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,recurring:!x.recurring}:x))}
+                              style={{ width:36,height:20,borderRadius:99,background:r.recurring?ROTATION_COLOR:NYU.gray200,cursor:"pointer",position:"relative",flexShrink:0,transition:"background 0.2s" }}>
+                              <div style={{ position:"absolute",top:2,left:r.recurring?18:2,width:16,height:16,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
+                            </div>
+                            <span style={{ fontSize:12,color:NYU.gray600 }}>Recurring</span>
+                            {r.recurring&&(
+                              <select style={{ ...inputStyle,fontSize:12,padding:"5px 8px",flex:1 }} value={r.recurringDay} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,recurringDay:e.target.value}:x))}>
+                                {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(d=><option key={d} value={d}>{d.charAt(0).toUpperCase()+d.slice(1)}</option>)}
+                              </select>
+                            )}
+                          </div>
+                          <div><label style={labelStyle}>Notes</label><input style={{ ...inputStyle,fontSize:12,padding:"7px 10px" }} placeholder="Supervisor, address, what to bring..." value={r.notes} onChange={e=>setRotations(prev=>prev.map(x=>x.id===r.id?{...x,notes:e.target.value}:x))}/></div>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                  <div style={{ fontSize:11,color:NYU.gray400,marginTop:6 }}>Current: {THEMES[themePreset]?.name}</div>
                 </div>
+              )}
 
-                <div style={{ marginBottom:16 }}>
-                  <div style={{ fontSize:12,fontWeight:600,color:NYU.gray600,marginBottom:8 }}>Tab Order</div>
-                  {dashTabOrder.map((key,i)=>(
-                    <div key={key} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
-                      <div style={{ flex:1,fontSize:13,color:NYU.gray600 }}>{TAB_DEFS[key]?.label}</div>
-                      <button onClick={()=>setDashTabOrder(o=>{const a=[...o];if(i>0){[a[i-1],a[i]]=[a[i],a[i-1]];}return a;})} disabled={i===0} style={{ background:"none",border:`1px solid ${NYU.gray200}`,borderRadius:6,padding:"2px 6px",cursor:"pointer",fontSize:11,color:NYU.gray500 }}>▲</button>
-                      <button onClick={()=>setDashTabOrder(o=>{const a=[...o];if(i<a.length-1){[a[i],a[i+1]]=[a[i+1],a[i]];}return a;})} disabled={i===dashTabOrder.length-1} style={{ background:"none",border:`1px solid ${NYU.gray200}`,borderRadius:6,padding:"2px 6px",cursor:"pointer",fontSize:11,color:NYU.gray500 }}>▼</button>
+              {/* ── Appearance tab ── */}
+              {settingsTab==="appearance"&&(
+                <div style={{ background:NYU.gray50,borderRadius:14,padding:"16px 18px" }}>
+                  <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Appearance</div>
+                  <div style={{ marginBottom:16 }}>
+                    <div style={{ fontSize:12,fontWeight:600,color:NYU.gray600,marginBottom:8 }}>Color Theme</div>
+                    <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                      {Object.entries(THEMES).map(([key,th])=>(
+                        <button key={key} onClick={()=>setThemePreset(key)} title={th.name}
+                          style={{ width:32,height:32,borderRadius:99,background:th.purple,border:themePreset===key?`3px solid ${NYU.gray900}`:"3px solid transparent",cursor:"pointer",fontSize:14,transition:"all 0.15s",outline:"none" }}
+                        >{themePreset===key?"✓":""}</button>
+                      ))}
                     </div>
-                  ))}
-                </div>
-
-                <div>
-                  <div style={{ fontSize:12,fontWeight:600,color:NYU.gray600,marginBottom:8 }}>Dashboard Stats</div>
-                  <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
-                    {STAT_DEFS.map(s=>{
-                      const on=visibleStats.includes(s.id);
-                      return <button key={s.id} onClick={()=>setVisibleStats(v=>on?v.filter(x=>x!==s.id):[...v,s.id])}
-                        style={{ padding:"5px 12px",borderRadius:99,fontSize:12,fontWeight:500,cursor:"pointer",border:`1.5px solid ${on?T.purple:NYU.gray200}`,background:on?T.purpleLight:"white",color:on?T.purple:NYU.gray500,transition:"all 0.15s" }}
-                      >{s.label}</button>;
-                    })}
+                    <div style={{ fontSize:11,color:NYU.gray400,marginTop:6 }}>Current: {THEMES[themePreset]?.name}</div>
+                  </div>
+                  <div style={{ marginBottom:16 }}>
+                    <div style={{ fontSize:12,fontWeight:600,color:NYU.gray600,marginBottom:8 }}>Tab Order</div>
+                    {dashTabOrder.map((key,i)=>(
+                      <div key={key} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
+                        <div style={{ flex:1,fontSize:13,color:NYU.gray600 }}>{TAB_DEFS[key]?.label}</div>
+                        <button onClick={()=>setDashTabOrder(o=>{const a=[...o];if(i>0){[a[i-1],a[i]]=[a[i],a[i-1]];}return a;})} disabled={i===0} style={{ background:"none",border:`1px solid ${NYU.gray200}`,borderRadius:6,padding:"2px 6px",cursor:"pointer",fontSize:11,color:NYU.gray500 }}>▲</button>
+                        <button onClick={()=>setDashTabOrder(o=>{const a=[...o];if(i<a.length-1){[a[i],a[i+1]]=[a[i+1],a[i]];}return a;})} disabled={i===dashTabOrder.length-1} style={{ background:"none",border:`1px solid ${NYU.gray200}`,borderRadius:6,padding:"2px 6px",cursor:"pointer",fontSize:11,color:NYU.gray500 }}>▼</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <div style={{ fontSize:12,fontWeight:600,color:NYU.gray600,marginBottom:8 }}>Dashboard Stats</div>
+                    <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
+                      {STAT_DEFS.map(s=>{
+                        const on=visibleStats.includes(s.id);
+                        return <button key={s.id} onClick={()=>setVisibleStats(v=>on?v.filter(x=>x!==s.id):[...v,s.id])}
+                          style={{ padding:"5px 12px",borderRadius:99,fontSize:12,fontWeight:500,cursor:"pointer",border:`1.5px solid ${on?T.purple:NYU.gray200}`,background:on?T.purpleLight:"white",color:on?T.purple:NYU.gray500,transition:"all 0.15s" }}
+                        >{s.label}</button>;
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div style={{ background:NYU.gray50,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-                <div><div style={{ fontSize:13,fontWeight:600,color:NYU.gray900 }}>ClinIQ</div><div style={{ fontSize:11,color:NYU.gray400,marginTop:2 }}>NYU College of Dentistry · v1.1</div></div>
-                <div style={{ width:36,height:36,borderRadius:10,background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`,display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ color:"white",fontSize:16,fontWeight:700 }}>C</span></div>
-              </div>
+              {/* ── Activity tab ── */}
+              {settingsTab==="activity"&&(
+                <div style={{ background:NYU.gray50,borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+                    <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em" }}>Activity Log</div>
+                    {changelog.length>10&&<button onClick={()=>setChangelogExpanded(v=>!v)} style={{ background:"none",border:"none",fontSize:12,color:T.purple,cursor:"pointer",fontFamily:"'Inter', sans-serif" }}>{changelogExpanded?"Show less":"View all"}</button>}
+                  </div>
+                  {changelog.length===0?(
+                    <div style={{ fontSize:13,color:NYU.gray400,textAlign:"center",padding:"12px 0" }}>No activity yet.</div>
+                  ):(
+                    <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                      {(changelogExpanded?changelog:changelog.slice(0,10)).map((entry,i)=>{
+                        const ICONS={PATIENT_ADDED:"👤",VISIT_LOGGED:"📋",PATIENT_DELETED:"🗑",VISIT_DELETED:"🗑",NOTE_DELETED:"🗑",APPT_REMOVED:"📅",ROTATION_REMOVED:"🔄",TREATMENT_COMPLETE:"✅",PREAUTH_UPDATED:"📄",LAB_UPDATED:"🧪"};
+                        const icon=ICONS[entry.action_type]||"•";
+                        const ts=new Date(entry.timestamp).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+                        return (
+                          <div key={i} style={{ display:"flex",gap:10,alignItems:"flex-start" }}>
+                            <span style={{ fontSize:14,flexShrink:0 }}>{icon}</span>
+                            <div style={{ flex:1,minWidth:0 }}>
+                              <div style={{ fontSize:12,color:NYU.gray700||NYU.gray600,lineHeight:1.4 }}>{entry.description}</div>
+                              <div style={{ fontSize:11,color:NYU.gray400,marginTop:2 }}>{ts}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div style={{ display:"flex",gap:10,marginTop:24 }}>
               <button className="action-btn" onClick={()=>setShowSettings(false)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>Cancel</button>
@@ -3746,11 +3767,18 @@ RESPONSE RULES:
                     fetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({graduationDate:settingsDraft.graduationDate,customGoals,clinicSchedule:settingsDraft.clinicSchedule||clinicSchedule,themePreset,dashTabOrder,visibleStats})}),
                     fetch("/api/rotations",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(rotations)}),
                   ]);
-                } catch(e){ console.error("Settings save error:",e); }
+                } catch(e){ console.error("Settings save error:",e); showError("Settings could not be saved — check your connection."); }
                 setShowSettings(false);
               }} style={{ flex:1,background:T.purple,color:"white" }}>Save Changes</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── ERROR TOAST ── */}
+      {errorToast&&(
+        <div style={{ position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:"#dc2626",color:"white",borderRadius:99,padding:"10px 20px",fontSize:13,fontWeight:600,boxShadow:"0 4px 16px rgba(0,0,0,0.2)",whiteSpace:"nowrap",animation:"fadeIn 0.2s ease",pointerEvents:"none" }}>
+          {errorToast}
         </div>
       )}
 
