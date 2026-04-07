@@ -642,6 +642,16 @@ const initialPatients = withAliases([
   },
 ]);
 
+const DISCIPLINE_GROUPS = {
+  "Restorative & General": ["Comprehensive Care","General Dentistry","Prosthodontics","Implant Dentistry"],
+  "Periodontics & Hygiene": ["Periodontics","Dental Hygiene"],
+  "Endodontics": ["Endodontics"],
+  "Oral Surgery": ["Oral & Maxillofacial Surgery"],
+  "Orthodontics": ["Orthodontics"],
+  "Pediatric Dentistry": ["Pediatric Dentistry"],
+  "Special Care": ["Special Needs Dentistry","Oral Medicine & Pathology"],
+};
+
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fraunces:ital,wght@0,700;1,400&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -675,8 +685,20 @@ const css = `
     .insights-grid { grid-template-columns: 1fr !important; }
     .page-header { flex-direction: column; align-items: flex-start !important; gap: 12px; }
     .modal-box { padding: 20px !important; width: 95% !important; }
-    .page-inner { padding: 20px 16px !important; }
+    .page-inner { padding: 16px 12px 100px !important; }
     .filter-row { overflow-x: auto; padding-bottom: 4px; flex-wrap: nowrap !important; }
+    .tab-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap !important; scroll-behavior: smooth; padding-bottom: 1px; }
+    .tab-nav button { white-space: nowrap; flex-shrink: 0; padding: 10px 14px !important; font-size: 13px !important; }
+    .top-bar { padding: 0 12px !important; height: auto !important; min-height: 52px; flex-wrap: wrap; gap: 6px; padding-top: 8px !important; padding-bottom: 8px !important; }
+    .top-bar-name { display: none !important; }
+    .chat-panel { width: calc(100vw - 32px) !important; right: 0 !important; }
+    .quick-log-panel { width: calc(100vw - 32px) !important; }
+    .float-right { bottom: 16px !important; right: 16px !important; }
+    .float-left { bottom: 16px !important; left: 16px !important; }
+    .intel-row { flex-direction: column !important; gap: 12px !important; }
+    .intel-pct { text-align: left !important; }
+    .action-btn { padding: 9px 14px !important; }
+    .goal-group-header { padding: 10px 14px !important; }
   }
 `;
 
@@ -791,6 +813,9 @@ export default function App() {
   const [showTransferModal, setShowTransferModal] = useState(null); // patient id
   const [transferToName, setTransferToName] = useState("");
   const [weeklyToastDismissed, setWeeklyToastDismissed] = useState(false);
+  const [showAllGoals, setShowAllGoals] = useState(false);
+  const [collapsedGoalGroups, setCollapsedGoalGroups] = useState({});
+  const [onboardingStep, setOnboardingStep] = useState(null); // 1–4 or null
 
   // ── Theme ─────────────────────────────────────────────────────────────────────
   const T = { ...NYU, ...(THEMES[themePreset] || THEMES["nyu-purple"]) };
@@ -811,7 +836,8 @@ export default function App() {
         fetch("/api/patients"), fetch("/api/notes"),
         fetch("/api/rotations"), fetch("/api/settings"),
       ]);
-      if (pRes.ok) setPatients(await pRes.json());
+      let pData = [];
+      if (pRes.ok) { pData = await pRes.json(); setPatients(pData); }
       if (nRes.ok) setNotes(await nRes.json());
       if (rRes.ok) setRotations(await rRes.json());
       if (sRes.ok) {
@@ -823,8 +849,10 @@ export default function App() {
         if (s.dashTabOrder && s.dashTabOrder.length > 0) setDashTabOrder(s.dashTabOrder);
         if (s.visibleStats && s.visibleStats.length > 0) setVisibleStats(s.visibleStats);
       }
+      return pData;
     } catch (err) {
       console.error("Failed to load data:", err);
+      return [];
     }
   }, []);
 
@@ -832,7 +860,10 @@ export default function App() {
     fetch("/api/auth/me").then(r => r.json()).then(async ({ user: u }) => {
       if (u) {
         setUser(u);
-        await loadUserData();
+        const pData = await loadUserData();
+        if (Array.isArray(pData) && pData.length === 0 && !localStorage.getItem("cliniq-onboarded")) {
+          setOnboardingStep(1);
+        }
       }
       setAppLoading(false);
     }).catch(() => setAppLoading(false));
@@ -1321,7 +1352,7 @@ RESPONSE RULES:
 
         {/* Top Header */}
         <div style={{ background:"white", borderBottom:`1px solid ${NYU.gray100}`, position:"sticky", top:0, zIndex:100 }}>
-          <div style={{ maxWidth:1100, margin:"0 auto", padding:"0 32px", display:"flex", alignItems:"center", justifyContent:"space-between", height:56 }}>
+          <div className="top-bar" style={{ maxWidth:1100, margin:"0 auto", padding:"0 32px", display:"flex", alignItems:"center", justifyContent:"space-between", height:56 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, position:"relative" }}>
               <button onClick={()=>setMenuOpen(!menuOpen)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px 8px", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}
                 onMouseEnter={e=>e.currentTarget.style.background=NYU.gray100} onMouseLeave={e=>e.currentTarget.style.background="none"}>
@@ -1379,7 +1410,7 @@ RESPONSE RULES:
               )}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:13, color:NYU.gray400 }}>{user?.year} · {user?.name}</span>
+              <span className="top-bar-name" style={{ fontSize:13, color:NYU.gray400 }}>{user?.year} · {user?.name}</span>
               <button onClick={()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setShowSettings(true); }} style={{ background:"none", border:"none", cursor:"pointer", padding:6, borderRadius:8, color:NYU.gray400, fontSize:16 }}>⚙️</button>
               <button onClick={handleLogout} style={{ background:NYU.gray100, border:"none", borderRadius:99, padding:"5px 14px", cursor:"pointer", color:NYU.gray600, fontSize:12, fontWeight:600, fontFamily:"'Inter', sans-serif" }}>Sign Out</button>
               <div style={{ width:32, height:32, borderRadius:"50%", background:T.lavender, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -1578,7 +1609,7 @@ RESPONSE RULES:
           })()}
 
           {/* Tab Nav */}
-          <div style={{ borderBottom:`1.5px solid ${NYU.gray100}`, marginBottom:24, display:"flex", gap:0 }}>
+          <div className="tab-nav" style={{ borderBottom:`1.5px solid ${NYU.gray100}`, marginBottom:24, display:"flex", gap:0 }}>
             {dashTabOrder.map(key=>{
               const def=TAB_DEFS[key]; if(!def) return null;
               return <button key={key} onClick={()=>setTab(key)} style={{ background:"none", border:"none", borderBottom:tab===key?`2px solid ${T.purple}`:"2px solid transparent", cursor:"pointer", fontFamily:"'Inter', sans-serif", fontSize:14, fontWeight:tab===key?600:400, padding:"10px 20px", marginBottom:-2, color:tab===key?T.purple:NYU.gray400, transition:"all 0.15s" }}>{def.label}</button>;
@@ -2233,39 +2264,108 @@ RESPONSE RULES:
                 </div>
               )}
 
-              {!editingGoals&&customGoals.filter(g=>g.visible).map(goal=>{
-                const primaryPatients=patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider!==false);
-                const supportingPatients=patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider===false);
-                const primaryVisits=primaryPatients.reduce((s,p)=>s+(p.visitLog?.length||0),0);
-                const supportingVisits=supportingPatients.reduce((s,p)=>s+(p.visitLog?.length||0),0);
-                const completed=primaryVisits;
-                const pct=Math.min((completed/goal.required)*100,100);
-                const color=pct>=100?NYU.green:pct>=60?NYU.blue:pct>=30?NYU.amber:NYU.red;
-                const qualifyingPatients=primaryPatients.filter(p=>!p.treatmentComplete);
+              {!editingGoals&&(()=>{
+                const goalsToShow = showAllGoals ? customGoals : customGoals.filter(g=>g.visible);
+                const allGroupDisciplines = Object.values(DISCIPLINE_GROUPS).flat();
+                const renderGoalCard = (goal) => {
+                  const primaryPatients=patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider!==false);
+                  const supportingPatients=patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider===false);
+                  const primaryVisits=primaryPatients.reduce((s,p)=>s+(p.visitLog?.length||0),0);
+                  const supportingVisits=supportingPatients.reduce((s,p)=>s+(p.visitLog?.length||0),0);
+                  const completed=primaryVisits;
+                  const pct=Math.min((completed/goal.required)*100,100);
+                  const color=pct>=100?NYU.green:pct>=60?NYU.blue:pct>=30?NYU.amber:NYU.red;
+                  const qualifyingPatients=primaryPatients.filter(p=>!p.treatmentComplete);
+                  return (
+                    <div key={goal.discipline} className="card" style={{ padding:"14px 18px",opacity:goal.visible?1:0.6 }}>
+                      {!goal.visible&&<div style={{ fontSize:10,fontWeight:600,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:4 }}>Hidden</div>}
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
+                        <span style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>{goal.discipline}</span>
+                        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                          {pct>=100&&<span style={{ fontSize:11,color:NYU.green,fontWeight:600 }}>✓ Done</span>}
+                          {pct<100&&<span style={{ fontSize:11,color:NYU.gray400 }}>{goal.required-completed} left</span>}
+                          <span style={{ fontSize:13,fontWeight:700,color }}>{completed}/{goal.required}</span>
+                        </div>
+                      </div>
+                      <div className="progress-bar"><div className="progress-fill" style={{ width:`${pct}%`,background:color }}/></div>
+                      <div style={{ marginTop:6,fontSize:11,color:NYU.gray400 }}>
+                        <span style={{ fontWeight:600,color:"#0f766e" }}>{primaryVisits} visits as primary</span>
+                        {supportingVisits>0&&<span> · <span style={{ color:NYU.gray500 }}>{supportingVisits} as supporting</span></span>}
+                      </div>
+                      {qualifyingPatients.length>0&&(
+                        <div style={{ marginTop:4,fontSize:11,color:NYU.gray600 }}>
+                          <span style={{ fontWeight:600,color:T.purple }}>Active: </span>
+                          {qualifyingPatients.map(p=>p.alias).join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+                const hiddenCount = customGoals.filter(g=>!g.visible).length;
                 return (
-                  <div key={goal.discipline} className="card" style={{ padding:"16px 20px" }}>
-                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
-                      <span style={{ fontWeight:600,fontSize:14,color:NYU.gray900 }}>{goal.discipline}</span>
-                      <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                        {pct>=100&&<span style={{ fontSize:12,color:NYU.green,fontWeight:600 }}>✓ Complete</span>}
-                        {pct<100&&<span style={{ fontSize:12,color:NYU.gray400 }}>{goal.required-completed} remaining</span>}
-                        <span style={{ fontSize:13,fontWeight:700,color }}>{completed}/{goal.required}</span>
-                      </div>
+                  <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                    <div style={{ display:"flex",justifyContent:"flex-end" }}>
+                      {hiddenCount>0&&(
+                        <button onClick={()=>setShowAllGoals(v=>!v)} style={{ background:"none",border:`1px solid ${NYU.gray200}`,cursor:"pointer",fontSize:12,color:T.purple,fontFamily:"'Inter',sans-serif",fontWeight:600,padding:"5px 12px",borderRadius:99,display:"flex",alignItems:"center",gap:4 }}>
+                          {showAllGoals ? "Show visible only" : `Show all (${hiddenCount} hidden)`}
+                        </button>
+                      )}
                     </div>
-                    <div className="progress-bar"><div className="progress-fill" style={{ width:`${pct}%`,background:color }}/></div>
-                    <div style={{ marginTop:8,fontSize:11,color:NYU.gray400 }}>
-                      <span style={{ fontWeight:600,color:"#0f766e" }}>{primaryVisits} visits as primary</span>
-                      {supportingVisits>0&&<span> · <span style={{ color:NYU.gray500 }}>{supportingVisits} as supporting</span></span>}
-                    </div>
-                    {qualifyingPatients.length>0&&(
-                      <div style={{ marginTop:6,fontSize:12,color:NYU.gray600 }}>
-                        <span style={{ fontWeight:600,color:T.purple }}>Active: </span>
-                        {qualifyingPatients.map(p=>p.alias).join(", ")}
-                      </div>
-                    )}
+                    {Object.entries(DISCIPLINE_GROUPS).map(([groupName, groupDisciplines]) => {
+                      const groupGoals = goalsToShow.filter(g=>groupDisciplines.includes(g.discipline));
+                      if (groupGoals.length === 0) return null;
+                      const isCollapsed = collapsedGoalGroups[groupName];
+                      const groupDone = groupGoals.filter(g => {
+                        const pv = patients.filter(p=>p.discipline===g.discipline&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
+                        return pv >= g.required;
+                      }).length;
+                      return (
+                        <div key={groupName}>
+                          <button className="goal-group-header" onClick={()=>setCollapsedGoalGroups(prev=>({...prev,[groupName]:!prev[groupName]}))}
+                            style={{ width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",background:NYU.gray100,borderRadius:12,border:"none",cursor:"pointer",fontFamily:"'Inter',sans-serif",marginBottom:isCollapsed?0:8,transition:"all 0.15s" }}>
+                            <span style={{ fontWeight:700,fontSize:13,color:NYU.gray900 }}>{groupName}</span>
+                            <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                              <span style={{ fontSize:12,color:groupDone===groupGoals.length?NYU.green:NYU.gray400,fontWeight:600 }}>{groupDone}/{groupGoals.length} complete</span>
+                              <span style={{ fontSize:12,color:NYU.gray600,transition:"transform 0.2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)" }}>▼</span>
+                            </div>
+                          </button>
+                          {!isCollapsed&&(
+                            <div style={{ display:"flex",flexDirection:"column",gap:8,paddingLeft:4,paddingRight:4 }}>
+                              {groupGoals.map(renderGoalCard)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {(()=>{
+                      const ungrouped = goalsToShow.filter(g=>!allGroupDisciplines.includes(g.discipline));
+                      if (ungrouped.length === 0) return null;
+                      const isCollapsed = collapsedGoalGroups["__custom__"];
+                      const customDone = ungrouped.filter(g => {
+                        const pv = patients.filter(p=>p.discipline===g.discipline&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
+                        return pv >= g.required;
+                      }).length;
+                      return (
+                        <div key="custom">
+                          <button className="goal-group-header" onClick={()=>setCollapsedGoalGroups(prev=>({...prev,__custom__:!prev.__custom__}))}
+                            style={{ width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",background:NYU.gray100,borderRadius:12,border:"none",cursor:"pointer",fontFamily:"'Inter',sans-serif",marginBottom:isCollapsed?0:8,transition:"all 0.15s" }}>
+                            <span style={{ fontWeight:700,fontSize:13,color:NYU.gray900 }}>Custom Goals</span>
+                            <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                              <span style={{ fontSize:12,color:customDone===ungrouped.length?NYU.green:NYU.gray400,fontWeight:600 }}>{customDone}/{ungrouped.length} complete</span>
+                              <span style={{ fontSize:12,color:NYU.gray600,transition:"transform 0.2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)" }}>▼</span>
+                            </div>
+                          </button>
+                          {!isCollapsed&&(
+                            <div style={{ display:"flex",flexDirection:"column",gap:8,paddingLeft:4,paddingRight:4 }}>
+                              {ungrouped.map(renderGoalCard)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
-              })}
+              })()}
             </div>
           )}
         </div>
@@ -3013,9 +3113,9 @@ RESPONSE RULES:
       })()}
 
       {/* ── QUICK LOG FLOATING BUTTON ── */}
-      <div style={{ position:"fixed",bottom:28,left:28,zIndex:2000 }}>
+      <div className="float-left" style={{ position:"fixed",bottom:28,left:28,zIndex:2000 }}>
         {quickLogOpen&&(
-          <div style={{ position:"absolute",bottom:72,left:0,width:340,background:"white",borderRadius:20,boxShadow:"0 8px 40px rgba(0,0,0,0.18)",overflow:"hidden",animation:"slideUp 0.2s ease" }}>
+          <div className="quick-log-panel" style={{ position:"absolute",bottom:72,left:0,width:340,background:"white",borderRadius:20,boxShadow:"0 8px 40px rgba(0,0,0,0.18)",overflow:"hidden",animation:"slideUp 0.2s ease" }}>
             <div style={{ background:"#0d9488",padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
               <div style={{ color:"white",fontWeight:700,fontSize:14 }}>✦ Quick Log Visit</div>
               <button onClick={()=>setQuickLogOpen(false)} style={{ background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,width:26,height:26,cursor:"pointer",color:"white",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center" }}>×</button>
@@ -3081,9 +3181,9 @@ RESPONSE RULES:
       </div>
 
       {/* ── FLOATING CHAT ── */}
-      <div style={{ position:"fixed",bottom:28,right:28,zIndex:2000 }}>
+      <div className="float-right" style={{ position:"fixed",bottom:28,right:28,zIndex:2000 }}>
         {chatOpen&&(
-          <div style={{ position:"absolute",bottom:72,right:0,width:380,height:540,background:"white",borderRadius:20,boxShadow:"0 8px 40px rgba(87,6,140,0.22)",display:"flex",flexDirection:"column",overflow:"hidden",animation:"slideUp 0.2s ease" }}>
+          <div className="chat-panel" style={{ position:"absolute",bottom:72,right:0,width:380,height:540,background:"white",borderRadius:20,boxShadow:"0 8px 40px rgba(87,6,140,0.22)",display:"flex",flexDirection:"column",overflow:"hidden",animation:"slideUp 0.2s ease" }}>
             {/* Header */}
             <div style={{ background:`linear-gradient(135deg, ${T.purpleDeep}, ${T.accent})`,padding:"16px 18px",display:"flex",alignItems:"center",gap:10 }}>
               <div style={{ width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
@@ -3650,6 +3750,131 @@ RESPONSE RULES:
                 setShowSettings(false);
               }} style={{ flex:1,background:T.purple,color:"white" }}>Save Changes</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 4-STEP ONBOARDING MODAL ── */}
+      {onboardingStep!==null&&(
+        <div className="modal-overlay" style={{ zIndex:3000 }}>
+          <div className="modal-box" style={{ maxWidth:480,padding:32 }}>
+            {/* Step indicator */}
+            <div style={{ display:"flex",gap:8,marginBottom:28 }}>
+              {[1,2,3,4].map(n=>(
+                <div key={n} style={{ flex:1,height:4,borderRadius:99,background:n<=onboardingStep?T.purple:NYU.gray200,transition:"background 0.3s" }}/>
+              ))}
+            </div>
+
+            {/* Step 1: Welcome */}
+            {onboardingStep===1&&(
+              <div style={{ textAlign:"center" }}>
+                <div style={{ width:64,height:64,borderRadius:18,background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px" }}>
+                  <span style={{ color:"white",fontSize:28,fontWeight:700 }}>C</span>
+                </div>
+                <h2 style={{ fontFamily:"'Fraunces', serif",fontSize:26,fontWeight:700,color:NYU.gray900,letterSpacing:"-0.02em",marginBottom:10 }}>Welcome to ClinIQ</h2>
+                <p style={{ color:NYU.gray600,fontSize:14,lineHeight:1.7,marginBottom:24 }}>
+                  Your personal clinical caseload manager — built for NYU College of Dentistry students. Track patients, log visits, monitor graduation requirements, and let AI do the heavy lifting.
+                </p>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:28,textAlign:"left" }}>
+                  {[
+                    { icon:"👤", label:"Patient roster", desc:"Track every case" },
+                    { icon:"🎓", label:"Grad requirements", desc:"Never miss a milestone" },
+                    { icon:"✦",  label:"AI assistant", desc:"Ask anything, anytime" },
+                    { icon:"📋", label:"Visit logging", desc:"NLP-powered notes" },
+                  ].map(f=>(
+                    <div key={f.label} style={{ background:T.lavender,borderRadius:12,padding:"12px 14px" }}>
+                      <div style={{ fontSize:20,marginBottom:4 }}>{f.icon}</div>
+                      <div style={{ fontSize:13,fontWeight:600,color:NYU.gray900 }}>{f.label}</div>
+                      <div style={{ fontSize:11,color:NYU.gray400,marginTop:1 }}>{f.desc}</div>
+                    </div>
+                  ))}
+                </div>
+                <button className="action-btn" onClick={()=>setOnboardingStep(2)} style={{ width:"100%",background:T.purple,color:"white",fontSize:14 }}>Get started →</button>
+              </div>
+            )}
+
+            {/* Step 2: Add first patient */}
+            {onboardingStep===2&&(
+              <div>
+                <div style={{ fontSize:32,marginBottom:16 }}>👤</div>
+                <h2 style={{ fontFamily:"'Fraunces', serif",fontSize:22,fontWeight:700,color:NYU.gray900,marginBottom:10 }}>Add your first patient</h2>
+                <p style={{ color:NYU.gray600,fontSize:14,lineHeight:1.6,marginBottom:20 }}>
+                  Each patient has a chart number, discipline, and visit log. Hit <strong>+ Add Patient</strong> from the toolbar anytime. You can also load a demo caseload from Settings to see ClinIQ in action.
+                </p>
+                <div style={{ background:NYU.gray100,borderRadius:14,padding:"14px 16px",marginBottom:20 }}>
+                  <div style={{ fontSize:12,fontWeight:700,color:NYU.gray600,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em" }}>What you'll track</div>
+                  {["Chart number & discipline","Procedure history & visit log","Pre-auth status & lab tracking","Next appointment & treatment phase"].map(item=>(
+                    <div key={item} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
+                      <div style={{ width:6,height:6,borderRadius:"50%",background:T.purple,flexShrink:0 }}/>
+                      <span style={{ fontSize:13,color:NYU.gray700 }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display:"flex",gap:10 }}>
+                  <button className="action-btn" onClick={()=>setOnboardingStep(3)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>Skip</button>
+                  <button className="action-btn" onClick={()=>{ setOnboardingStep(null); localStorage.setItem("cliniq-onboarded","1"); setShowAddModal(true); }} style={{ flex:2,background:T.purple,color:"white" }}>+ Add a patient now</button>
+                </div>
+                <button onClick={()=>setOnboardingStep(3)} style={{ width:"100%",marginTop:10,background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter',sans-serif" }}>Continue setup →</button>
+              </div>
+            )}
+
+            {/* Step 3: Set graduation goals */}
+            {onboardingStep===3&&(
+              <div>
+                <div style={{ fontSize:32,marginBottom:16 }}>🎓</div>
+                <h2 style={{ fontFamily:"'Fraunces', serif",fontSize:22,fontWeight:700,color:NYU.gray900,marginBottom:10 }}>Set your graduation goals</h2>
+                <p style={{ color:NYU.gray600,fontSize:14,lineHeight:1.6,marginBottom:16 }}>
+                  ClinIQ tracks progress toward NYU's graduation requirements across all 12 clinical disciplines. You can customize target visit counts in <strong>Graduation Goals</strong>.
+                </p>
+                <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:20 }}>
+                  {[
+                    { label:"General Dentistry", req:20, color:T.purple },
+                    { label:"Periodontics", req:12, color:NYU.blue },
+                    { label:"Endodontics", req:10, color:NYU.green },
+                  ].map(g=>(
+                    <div key={g.label} style={{ display:"flex",alignItems:"center",gap:12 }}>
+                      <span style={{ fontSize:12,fontWeight:600,color:NYU.gray600,width:160 }}>{g.label}</span>
+                      <div style={{ flex:1,height:6,borderRadius:99,background:NYU.gray200 }}>
+                        <div style={{ width:"0%",height:"100%",borderRadius:99,background:g.color }}/>
+                      </div>
+                      <span style={{ fontSize:11,color:NYU.gray400,width:40,textAlign:"right" }}>0/{g.req}</span>
+                    </div>
+                  ))}
+                  <div style={{ fontSize:11,color:NYU.gray400,textAlign:"center",marginTop:4 }}>+ 9 more disciplines</div>
+                </div>
+                <div style={{ background:"#fef9c3",borderRadius:12,padding:"12px 14px",border:"1px solid #fde047",marginBottom:20 }}>
+                  <div style={{ fontSize:13,color:"#78350f" }}>💡 Set your graduation date in Settings to see how many visits/week you need to stay on track.</div>
+                </div>
+                <div style={{ display:"flex",gap:10 }}>
+                  <button className="action-btn" onClick={()=>setOnboardingStep(2)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>← Back</button>
+                  <button className="action-btn" onClick={()=>setOnboardingStep(4)} style={{ flex:2,background:T.purple,color:"white" }}>Next →</button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Meet the AI assistant */}
+            {onboardingStep===4&&(
+              <div>
+                <div style={{ fontSize:32,marginBottom:16 }}>✦</div>
+                <h2 style={{ fontFamily:"'Fraunces', serif",fontSize:22,fontWeight:700,color:NYU.gray900,marginBottom:10 }}>Meet your AI assistant</h2>
+                <p style={{ color:NYU.gray600,fontSize:14,lineHeight:1.6,marginBottom:16 }}>
+                  ClinIQ uses Claude AI to understand your caseload and help you work smarter. Ask it anything — in plain English.
+                </p>
+                <div style={{ background:T.lavender,borderRadius:14,padding:"14px 16px",marginBottom:16 }}>
+                  <div style={{ fontSize:12,fontWeight:700,color:T.purple,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.06em" }}>Try asking</div>
+                  {["Am I on track to graduate?","Which patients need follow-up?","Parse this visit note: saw patient for crown prep, next in 3 weeks"].map(q=>(
+                    <div key={q} style={{ background:"white",borderRadius:8,padding:"8px 12px",fontSize:12,color:NYU.gray700,marginBottom:6,border:`1px solid ${NYU.gray200}` }}>"{q}"</div>
+                  ))}
+                </div>
+                <div style={{ background:NYU.gray100,borderRadius:12,padding:"12px 14px",marginBottom:20,fontSize:13,color:NYU.gray600,lineHeight:1.5 }}>
+                  🔒 HIPAA-safe — no real patient names or chart numbers are sent to AI. Use patient aliases only.
+                </div>
+                <button className="action-btn" onClick={()=>{ setOnboardingStep(null); localStorage.setItem("cliniq-onboarded","1"); }} style={{ width:"100%",background:T.purple,color:"white",fontSize:14,marginBottom:10 }}>
+                  Start using ClinIQ 🎉
+                </button>
+                <button onClick={()=>setOnboardingStep(3)} style={{ width:"100%",background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter',sans-serif" }}>← Back</button>
+              </div>
+            )}
           </div>
         </div>
       )}

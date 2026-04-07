@@ -1,0 +1,21 @@
+In App.jsx, make the following three updates:
+A. Graduation Goals — Three Sections with Show All Toggle
+On the Requirements tab, group the customGoals display into three labeled sections rendered in this order: Complete (visits >= required), Needs Cases (visits > 0 but < required), Not Started (0 visits). Each section should have a header with a count, e.g. "✓ Complete (3)". Add a showAllGoals state toggle button at the top right of the panel — when off, hide the Not Started section; when on, show all three. Keep all existing goal card UI identical — just reorganize into these groups.
+B. Onboarding Experience
+After login, if patients.length === 0 && notes.length === 0, set showOnboarding to true. Show a modal using existing .modal-box / .modal-overlay styles with 4 steps controlled by a onboardingStep state (1–4):
+
+Step 1: Welcome — "Welcome to ClinIQ" heading, one sentence description, NYU purple gradient header with the C logo
+Step 2: Set Your Info — show graduation date input and student year select (pre-filled from user state), save via existing settings flow
+Step 3: Add Your First Patient — show two buttons: "Add My First Patient" (sets showOnboarding(false) and opens showAddModal) and "Load Demo Data" (calls loadDemoData)
+Step 4: Tour tip — single card saying "Use the ✦ button (bottom left) to quick-log visits, and ✦ (bottom right) to ask your AI assistant anything." with a "Got it, let's go" dismiss button
+Show a step indicator (e.g. "2 of 4") and a Next/Back button row. Dismiss the modal when step 4 is completed. Do not show onboarding again once dismissed — store a onboardingDone flag in component state.
+
+C. Mobile Responsiveness Fixes
+Apply these fixes for screens under 640px using inline style logic (window.innerWidth < 640) or existing media queries in the css string:
+
+Tab nav: add overflowX: 'auto', whiteSpace: 'nowrap', WebkitOverflowScrolling: 'touch' so tabs scroll horizontally
+Floating buttons: ensure quick log (bottom left) and chat (bottom right) do not overlap — set both to bottom: 20 with width: 48, height: 48 on mobile
+Modals: on mobile set modal width to 100%, maxWidth: '100%', borderRadius: '20px 20px 0 0', and position: 'fixed', bottom: 0 (bottom sheet style)
+Patient detail header: wrap action buttons to a second line on mobile using flexWrap: 'wrap'
+Stats grid: confirm it collapses to 2-column on mobile (check existing media query targets .stats-grid)
+Page inner padding: reduce to 16px 12px on mobile
