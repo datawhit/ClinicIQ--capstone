@@ -233,8 +233,8 @@ app.post('/api/patients/import', requireAuth, async (req, res) => {
       const discipline  = (r.discipline || 'General Dentistry').trim();
       const lastVisit   = (r.lastVisit || '').trim();
       if (!chartNumber && !procedure) { skipped++; continue; }
-      // Trust id and alias from the client if they are well-formed; only fall back server-side
-      const id    = (r.id    && r.id.startsWith('PT-'))  ? r.id    : `PT-${Date.now().toString(36).toUpperCase()}`;
+      // Always generate a collision-safe unique ID; trust alias from client if well-formed
+      const id    = `PT-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2,5).toUpperCase()}`;
       const alias = (r.alias && r.alias.startsWith('P-')) ? r.alias : `P-${year}-${String(baseCount + 1).padStart(3, '0')}`;
       if (!(r.alias && r.alias.startsWith('P-'))) baseCount++;
       await pool.query(`

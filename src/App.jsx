@@ -1264,7 +1264,6 @@ RESPONSE RULES:
     setImportLoading(true);
     try {
       const payload = importRawRows.map((row, index) => ({
-        id:          `PT-${String(patients.length + index + 1).padStart(3, '0')}`,
         alias:       generateAlias(patients.length + index),
         chartNumber: row[importMapping.chartNumber]||"",
         lastVisit:   row[importMapping.lastVisit]||"",
