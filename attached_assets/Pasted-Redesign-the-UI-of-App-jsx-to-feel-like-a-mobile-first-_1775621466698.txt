@@ -1,0 +1,33 @@
+Redesign the UI of App.jsx to feel like a mobile-first iOS productivity app. Keep all existing logic, state, API calls, helper functions, and data structures completely intact. Only replace the visual layer and navigation structure.
+Navigation — replace top tabs with bottom nav
+Remove the current top tab bar. Add a fixed bottom navigation bar 56px tall with a white background and a 1px top border. Four tabs: Today, Roster, Goals, AI. Each tab has a simple icon and a label. Active tab uses #534AB7 purple for both icon and label. Inactive tabs use muted gray. The bottom nav is always visible on all screens.
+Move the AI chat from a floating button into its own full screen tab. The floating chat button is removed. The quick log floating button on the bottom left stays.
+Screen 1 — Today tab
+Top: personalized greeting based on time of day, "Good morning Whitney" or "Good afternoon Whitney" etc, in Fraunces serif 24px bold. Date and patient count in muted 13px text below.
+Three stat chips in a horizontal row: today's appointments (purple #EEEDFE background #3C3489 text), pending items (amber #FAEEDA background #633806 text), requirements left (teal #E1F5EE background #085041 text). Each chip is a rounded card with the number large and the label small below it.
+One nudge card below: soft background tinted to match its color, 3px colored left border, no full border, border-radius 12px, icon on the left, bold title and muted description text. Warm encouraging language. Not a warning.
+Today's appointments card: gray section label, each row has a colored discipline avatar 32px rounded square, patient alias in 13px medium weight, procedure and time in 11px muted text, and a teal #1D9E75 Log Visit button that opens the existing log modal.
+If no appointments show a friendly empty state illustration using text and emoji only.
+Below that show urgent patients needing attention with amber styling, same row format as appointments but without the log button.
+Screen 2 — Roster tab
+Search bar at top, full width, rounded, gray background, no hard border.
+Horizontal scrollable filter pills below: All, Urgent, F/U Needed, Complete. Active pill is #534AB7 purple with white text. Inactive pills have a light gray background.
+Patient rows: 64px min height, colored discipline avatar 36px rounded square with two-letter initials, patient alias 15px medium weight, discipline and last procedure 12px muted below, status badge on far right. Badge colors: green for Active (#EAF3DE background #27500A text), amber for F/U Needed (#FAEEDA background #633806 text), red for Urgent (#FCEBEB background #791F1F text), purple for Complete (#EEEDFE background #3C3489 text). Tapping a row opens the existing patient detail screen. Urgent patients have a subtle amber left border on their row.
+Screen 3 — Goals tab
+Overall progress bar at top: white card, label "Graduation progress" on the left, percentage number 22px bold on the right, thin 4px progress bar below in purple, days remaining in muted 11px text below the bar.
+One focus nudge card below it in amber highlighting the most behind discipline.
+Three sections stacked: Needs Cases (amber section header 11px uppercase), Complete (green section header), Not Started (gray, hidden behind a Show toggle button). Each goal is a clean row showing discipline name 13px, thin 3px progress bar, and X of Y fraction right-aligned. No full cards, just rows with 12px padding and a thin bottom border between them. Progress bar color matches the section: purple for needs cases, green for complete, gray for not started.
+Screen 4 — AI tab
+Full screen. Purple gradient header #534AB7 to #3C3489, 72px tall, shows ClinIQ Assistant in white 15px bold and HIPAA-safe caseload-aware in white 11px muted.
+Scrollable message thread below. User messages right-aligned purple bubbles. Assistant messages left-aligned gray background bubbles with a small purple ✦ avatar. Typing indicator three bouncing dots.
+When thread has only the initial message show quick prompt pills: Am I on track to graduate, Which patients need follow-up, Explain SRP aftercare in Spanish, Any pre-auths ready to check. Each pill is a white rounded button with purple text and a thin purple border.
+Text input bar pinned to bottom: gray rounded input, microphone button, send button in purple. Matches existing sendChat functionality exactly.
+Design system applied everywhere
+Font: Inter for all UI, Fraunces serif for headings and large numbers only.
+Page background: #f8f6fb.
+Cards: white background, border 1px solid rgba(107,33,168,0.08), border-radius 16px, padding 16px.
+All interactive elements minimum 44px touch target height.
+Spacing: use multiples of 4px for all padding and margins.
+Smooth transitions 0.18s ease on all interactive state changes.
+The existing NYU color constants and T theme variables stay in place and continue to work.
+All existing modals, panels, settings, calendar, notebook, paired provider, and patient detail screens stay exactly as they are — only the four main tab screens and the navigation bar are being redesigned.
