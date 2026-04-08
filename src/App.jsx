@@ -2058,56 +2058,85 @@ RESPONSE RULES:
           })()}
 
           {/* ── NOTEBOOK TAB ── */}
-          {tab==="notebook"&&(
-            <div style={{ display:"flex",gap:20,alignItems:"flex-start" }}>
-              <div style={{ width:280,flexShrink:0 }}>
-                <div style={{ display:"flex",gap:8,marginBottom:16 }}>
-                  <input style={{ ...inputStyle,fontSize:13,padding:"8px 12px",flex:1 }} placeholder="Search notes..." value={noteSearch} onChange={e=>setNoteSearch(e.target.value)}/>
-                  <button className="action-btn" onClick={async()=>{ const id=`n${Date.now()}`; const todayStr=new Date().toISOString().split("T")[0]; const n={ id,title:"Untitled",body:"",category:"General",pinned:false,updatedAt:todayStr }; await fetch("/api/notes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)}); setNotes(prev=>[n,...prev]); setActiveNote(id); setNoteDraft(n); }} style={{ background:T.purple,color:"white",padding:"8px 14px",fontSize:13,flexShrink:0 }}>+ New</button>
+          {tab==="notebook"&&(()=>{
+            const createNote = async () => {
+              const id=`n${Date.now()}`; const todayStr=new Date().toISOString().split("T")[0];
+              const n={ id,title:"Untitled",body:"",category:"General",pinned:false,updatedAt:todayStr };
+              await fetch("/api/notes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)});
+              setNotes(prev=>[n,...prev]); setActiveNote(id); setNoteDraft(n);
+            };
+            const NoteEditor = () => (
+              <div style={{ background:"white",borderRadius:isMobile?0:16,border:isMobile?"none":`1px solid ${NYU.gray100}`,overflow:"hidden",minHeight:isMobile?"calc(100vh - 160px)":"auto" }}>
+                <div style={{ padding:"12px 16px",borderBottom:`1px solid ${NYU.gray100}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                  {isMobile&&(
+                    <button onClick={()=>{ setActiveNote(null); setNoteDraft(null); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:18,color:NYU.gray400,padding:"2px 6px 2px 0",marginRight:2 }}>‹</button>
+                  )}
+                  <select value={noteDraft.category} onChange={e=>setNoteDraft(p=>({...p,category:e.target.value}))}
+                    style={{ fontSize:12,fontWeight:600,border:"none",background:noteDraft.category==="Clinical"?"#e0f2fe":noteDraft.category==="Patient"?"#f3e8ff":noteDraft.category==="Study"?"#d1fae5":"#fef3c7",color:noteDraft.category==="Clinical"?"#0369a1":noteDraft.category==="Patient"?"#6d28d9":noteDraft.category==="Study"?"#065f46":"#92400e",borderRadius:99,padding:"4px 12px",cursor:"pointer",outline:"none",fontFamily:"'Inter', sans-serif" }}>
+                    <option>Clinical</option><option>Patient</option><option>Study</option><option>General</option>
+                  </select>
+                  <button onClick={()=>setNoteDraft(p=>({...p,pinned:!p.pinned}))} style={{ background:noteDraft.pinned?NYU.amberLight:NYU.gray100,border:"none",borderRadius:99,padding:"4px 12px",cursor:"pointer",fontSize:12,color:noteDraft.pinned?NYU.amber:NYU.gray400,fontWeight:600,fontFamily:"'Inter', sans-serif" }}>{noteDraft.pinned?"📌 Pinned":"Pin"}</button>
+                  <div style={{ flex:1 }}/>
+                  <button onClick={()=>setConfirmDelete({ message:`Delete note "${noteDraft?.title||"Untitled"}"?`, onConfirm:async()=>{ logChange({ action_type:"NOTE_DELETED",patient_alias:"",description:`Deleted note "${noteDraft?.title||"Untitled"}"` }); await fetch(`/api/notes/${activeNote}`,{method:"DELETE"}); setNotes(prev=>prev.filter(n=>n.id!==activeNote)); setActiveNote(null); setNoteDraft(null); } })} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter', sans-serif",padding:"4px 8px" }}>Delete</button>
+                  <button className="action-btn" onClick={async()=>{ const updated={...noteDraft,updatedAt:new Date().toISOString().split("T")[0]}; await fetch(`/api/notes/${activeNote}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(updated)}); setNotes(prev=>prev.map(n=>n.id===activeNote?updated:n)); setNoteDraft(updated); }} style={{ background:T.purple,color:"white",padding:"7px 18px",fontSize:13 }}>Save</button>
                 </div>
-                {notes.filter(n=>n.pinned).length>0&&(
-                  <div style={{ marginBottom:16 }}>
-                    <div style={{ fontSize:10,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8 }}>Pinned</div>
-                    {notes.filter(n=>n.pinned&&(!noteSearch||n.title.toLowerCase().includes(noteSearch.toLowerCase())||n.body.toLowerCase().includes(noteSearch.toLowerCase()))).map(note=>(
-                      <NoteCard key={note.id} note={note} active={activeNote===note.id} onClick={()=>{ setActiveNote(note.id); setNoteDraft({...note}); }} activeBg={T.lavender}/>
-                    ))}
-                  </div>
-                )}
-                <div>
-                  <div style={{ fontSize:10,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8 }}>All Notes</div>
-                  {notes.filter(n=>!n.pinned&&(!noteSearch||n.title.toLowerCase().includes(noteSearch.toLowerCase())||n.body.toLowerCase().includes(noteSearch.toLowerCase()))).map(note=>(
-                    <NoteCard key={note.id} note={note} active={activeNote===note.id} onClick={()=>{ setActiveNote(note.id); setNoteDraft({...note}); }} activeBg={T.lavender}/>
-                  ))}
-                </div>
+                <input style={{ width:"100%",boxSizing:"border-box",fontSize:22,fontWeight:700,color:NYU.gray900,fontFamily:"'Fraunces', serif",border:"none",outline:"none",padding:"20px 20px 6px",letterSpacing:"-0.01em" }} placeholder="Untitled" value={noteDraft.title} onChange={e=>setNoteDraft(p=>({...p,title:e.target.value}))}/>
+                <div style={{ fontSize:11,color:NYU.gray400,paddingLeft:20,paddingBottom:10 }}>Last updated {noteDraft.updatedAt}</div>
+                <textarea style={{ width:"100%",boxSizing:"border-box",minHeight:360,fontSize:15,color:NYU.gray600,border:"none",outline:"none",padding:"0 20px 28px",resize:"none",lineHeight:1.8,fontFamily:"'Inter', sans-serif",background:"transparent" }} placeholder="Start writing..." value={noteDraft.body} onChange={e=>setNoteDraft(p=>({...p,body:e.target.value}))}/>
               </div>
-              <div style={{ flex:1,minWidth:0 }}>
-                {!activeNote||!noteDraft?(
-                  <div style={{ background:"white",borderRadius:16,border:`1px solid ${NYU.gray100}`,padding:"80px 40px",textAlign:"center" }}>
-                    <div style={{ fontSize:40,marginBottom:16 }}>📓</div>
-                    <div style={{ fontSize:16,fontWeight:600,color:NYU.gray900,marginBottom:8 }}>Your Notebook</div>
-                    <div style={{ fontSize:13,color:NYU.gray400,marginBottom:24,lineHeight:1.6 }}>Jot down clinical thoughts, patient reminders, study notes.</div>
-                    <button className="action-btn" onClick={async()=>{ const id=`n${Date.now()}`; const todayStr=new Date().toISOString().split("T")[0]; const n={ id,title:"Untitled",body:"",category:"General",pinned:false,updatedAt:todayStr }; await fetch("/api/notes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(n)}); setNotes(prev=>[n,...prev]); setActiveNote(id); setNoteDraft(n); }} style={{ background:T.purple,color:"white" }}>Create your first note</button>
+            );
+            const NoteList = () => (
+              <div>
+                <div style={{ display:"flex",gap:8,marginBottom:16 }}>
+                  <input style={{ ...inputStyle,fontSize:13,padding:"10px 14px",flex:1 }} placeholder="Search notes..." value={noteSearch} onChange={e=>setNoteSearch(e.target.value)}/>
+                  <button className="action-btn" onClick={createNote} style={{ background:T.purple,color:"white",padding:"10px 16px",fontSize:13,flexShrink:0 }}>+ New</button>
+                </div>
+                {notes.length===0?(
+                  <div style={{ textAlign:"center",padding:"60px 20px" }}>
+                    <div style={{ fontSize:40,marginBottom:14 }}>📓</div>
+                    <div style={{ fontSize:15,fontWeight:700,color:NYU.gray900,marginBottom:8 }}>Your Notebook</div>
+                    <div style={{ fontSize:13,color:NYU.gray400,marginBottom:20,lineHeight:1.5 }}>Jot down clinical thoughts, patient reminders, study notes.</div>
+                    <button className="action-btn" onClick={createNote} style={{ background:T.purple,color:"white" }}>Create your first note</button>
                   </div>
                 ):(
-                  <div style={{ background:"white",borderRadius:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
-                    <div style={{ padding:"14px 20px",borderBottom:`1px solid ${NYU.gray100}`,display:"flex",alignItems:"center",gap:10 }}>
-                      <select value={noteDraft.category} onChange={e=>setNoteDraft(p=>({...p,category:e.target.value}))}
-                        style={{ fontSize:12,fontWeight:600,border:"none",background:noteDraft.category==="Clinical"?"#e0f2fe":noteDraft.category==="Patient"?"#f3e8ff":noteDraft.category==="Study"?"#d1fae5":"#fef3c7",color:noteDraft.category==="Clinical"?"#0369a1":noteDraft.category==="Patient"?"#6d28d9":noteDraft.category==="Study"?"#065f46":"#92400e",borderRadius:99,padding:"4px 12px",cursor:"pointer",outline:"none",fontFamily:"'Inter', sans-serif" }}>
-                        <option>Clinical</option><option>Patient</option><option>Study</option><option>General</option>
-                      </select>
-                      <button onClick={()=>setNoteDraft(p=>({...p,pinned:!p.pinned}))} style={{ background:noteDraft.pinned?NYU.amberLight:NYU.gray100,border:"none",borderRadius:99,padding:"4px 12px",cursor:"pointer",fontSize:12,color:noteDraft.pinned?NYU.amber:NYU.gray400,fontWeight:600,fontFamily:"'Inter', sans-serif" }}>{noteDraft.pinned?"📌 Pinned":"Pin"}</button>
-                      <div style={{ flex:1 }}/>
-                      <button onClick={()=>setConfirmDelete({ message:`Delete note "${noteDraft?.title||"Untitled"}"?`, onConfirm:async()=>{ logChange({ action_type:"NOTE_DELETED",patient_alias:"",description:`Deleted note "${noteDraft?.title||"Untitled"}"` }); await fetch(`/api/notes/${activeNote}`,{method:"DELETE"}); setNotes(prev=>prev.filter(n=>n.id!==activeNote)); setActiveNote(null); setNoteDraft(null); } })} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:NYU.gray400,fontFamily:"'Inter', sans-serif",padding:"4px 8px" }}>Delete</button>
-                      <button className="action-btn" onClick={async()=>{ const updated={...noteDraft,updatedAt:new Date().toISOString().split("T")[0]}; await fetch(`/api/notes/${activeNote}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(updated)}); setNotes(prev=>prev.map(n=>n.id===activeNote?updated:n)); setNoteDraft(updated); }} style={{ background:T.purple,color:"white",padding:"7px 18px",fontSize:13 }}>Save</button>
+                  <>
+                    {notes.filter(n=>n.pinned).length>0&&(
+                      <div style={{ marginBottom:16 }}>
+                        <div style={{ fontSize:10,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8 }}>Pinned</div>
+                        {notes.filter(n=>n.pinned&&(!noteSearch||n.title.toLowerCase().includes(noteSearch.toLowerCase())||n.body.toLowerCase().includes(noteSearch.toLowerCase()))).map(note=>(
+                          <NoteCard key={note.id} note={note} active={activeNote===note.id} onClick={()=>{ setActiveNote(note.id); setNoteDraft({...note}); }} activeBg={T.lavender}/>
+                        ))}
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ fontSize:10,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8 }}>All Notes</div>
+                      {notes.filter(n=>!n.pinned&&(!noteSearch||n.title.toLowerCase().includes(noteSearch.toLowerCase())||n.body.toLowerCase().includes(noteSearch.toLowerCase()))).map(note=>(
+                        <NoteCard key={note.id} note={note} active={activeNote===note.id} onClick={()=>{ setActiveNote(note.id); setNoteDraft({...note}); }} activeBg={T.lavender}/>
+                      ))}
                     </div>
-                    <input style={{ width:"100%",fontSize:24,fontWeight:700,color:NYU.gray900,fontFamily:"'Fraunces', serif",border:"none",outline:"none",padding:"24px 28px 8px",letterSpacing:"-0.01em" }} placeholder="Untitled" value={noteDraft.title} onChange={e=>setNoteDraft(p=>({...p,title:e.target.value}))}/>
-                    <div style={{ fontSize:11,color:NYU.gray400,paddingLeft:28,paddingBottom:12 }}>Last updated {noteDraft.updatedAt}</div>
-                    <textarea style={{ width:"100%",minHeight:420,fontSize:15,color:NYU.gray600,border:"none",outline:"none",padding:"0 28px 28px",resize:"none",lineHeight:1.8,fontFamily:"'Inter', sans-serif",background:"transparent" }} placeholder="Start writing..." value={noteDraft.body} onChange={e=>setNoteDraft(p=>({...p,body:e.target.value}))}/>
-                  </div>
+                  </>
                 )}
               </div>
-            </div>
-          )}
+            );
+            if(isMobile) {
+              return activeNote&&noteDraft ? <NoteEditor/> : <NoteList/>;
+            }
+            return (
+              <div style={{ display:"flex",gap:20,alignItems:"flex-start" }}>
+                <div style={{ width:300,flexShrink:0 }}><NoteList/></div>
+                <div style={{ flex:1,minWidth:0 }}>
+                  {!activeNote||!noteDraft?(
+                    <div style={{ background:"white",borderRadius:16,border:`1px solid ${NYU.gray100}`,padding:"80px 40px",textAlign:"center" }}>
+                      <div style={{ fontSize:40,marginBottom:16 }}>📓</div>
+                      <div style={{ fontSize:16,fontWeight:600,color:NYU.gray900,marginBottom:8 }}>Your Notebook</div>
+                      <div style={{ fontSize:13,color:NYU.gray400,marginBottom:24,lineHeight:1.6 }}>Select a note or create a new one.</div>
+                      <button className="action-btn" onClick={createNote} style={{ background:T.purple,color:"white" }}>+ New Note</button>
+                    </div>
+                  ):<NoteEditor/>}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── REQUIREMENTS TAB ── */}
           {tab==="goals"&&(()=>{
