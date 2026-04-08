@@ -217,6 +217,48 @@ app.post('/api/patients', requireAuth, async (req, res) => {
   }
 });
 
+// ── IMPORT ROSTER ──────────────────────────────────────────────────────────────
+app.post('/api/patients/import', requireAuth, async (req, res) => {
+  const { rows } = req.body;
+  if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'No rows provided' });
+  let created = 0, skipped = 0, errors = [];
+  for (const r of rows) {
+    try {
+      const chartNumber = (r.chartNumber || '').trim();
+      const procedure   = (r.procedure || '').trim();
+      const discipline  = (r.discipline || 'General Dentistry').trim();
+      const lastVisit   = (r.lastVisit || '').trim();
+      if (!chartNumber && !procedure) { skipped++; continue; }
+      const { rows: existing } = await pool.query('SELECT COUNT(*) FROM patients WHERE user_id=$1', [req.session.userId]);
+      const count = parseInt(existing[0].count);
+      const id = `PT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5)}`;
+      const year = new Date().getFullYear();
+      const alias = chartNumber ? `Chart-${chartNumber}` : `P-${year}-${String(count + 1).padStart(3, '0')}`;
+      await pool.query(`
+        INSERT INTO patients (id,user_id,alias,chart_number,procedure,discipline,last_visit,treatment_start,
+          expected_completion,next_appt,next_appt_time,treatment_complete,lab_status,lab_sent_date,
+          lab_received_date,pre_auth,pre_auth_submitted_date,notes,handoff_partner,handoff_partner_year,
+          handoff_notes,patient_language,is_primary_provider,shared_with_d3)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+        [id, req.session.userId, alias, chartNumber, procedure, discipline,
+         lastVisit, '', '', null, '', false, 'None', '', '', 'Not Submitted', '',
+         '', '', 'D3', '', 'English', true, false]
+      );
+      if (lastVisit && procedure) {
+        await pool.query(
+          'INSERT INTO visit_logs (patient_id,visit_date,procedure,notes,cdt_code) VALUES ($1,$2,$3,$4,$5)',
+          [id, lastVisit, procedure, 'Imported from roster CSV.', '']
+        );
+      }
+      created++;
+      await new Promise(r => setTimeout(r, 2)); // tiny delay to prevent ID collision
+    } catch (err) {
+      errors.push(err.message);
+    }
+  }
+  res.json({ created, skipped, errors: errors.slice(0, 5) });
+});
+
 app.put('/api/patients/:id', requireAuth, async (req, res) => {
   const p = req.body;
   try {

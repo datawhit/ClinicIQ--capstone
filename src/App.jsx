@@ -821,6 +821,15 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [settingsTab, setSettingsTab] = useState("profile");
   const [errorToast, setErrorToast] = useState("");
+  const [expandedSections, setExpandedSections] = useState(["visitHistory"]);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importStep, setImportStep] = useState(1);
+  const [importRawRows, setImportRawRows] = useState([]);
+  const [importHeaders, setImportHeaders] = useState([]);
+  const [importMapping, setImportMapping] = useState({ chartNumber:"", lastVisit:"", procedure:"", discipline:"" });
+  const [importPreview, setImportPreview] = useState([]);
+  const [importResult, setImportResult] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 640);
@@ -1098,6 +1107,16 @@ PATIENT LANGUAGE AWARENESS:
 - When asked to translate instructions or explain a procedure for a patient, respond in that patient's language using plain, non-clinical language appropriate for a patient (not a clinician).
 - Always confirm which patient and which language you're translating for before translating.
 
+NYUCD CLINICAL KNOWLEDGE BASE:
+Common procedures and CDT codes used at NYUCD:
+D0150 Comprehensive oral exam (new patient, required before any treatment); D0210 Full mouth X-rays (FMX); D0220 Periapical X-ray; D0230 Additional periapical; D0274 Bitewing 4-film series; D0330 Panoramic; D0340 2D cephalometric; D1110 Adult prophy; D1120 Child prophy; D1206 Fluoride varnish; D1351 Sealant per tooth; D2140 Amalgam 1-surface; D2150 Amalgam 2-surface; D2160 Amalgam 3-surface; D2330 Resin 1-surface anterior; D2331 Resin 2-surface anterior; D2332 Resin 3-surface anterior; D2390 Resin crown anterior; D2391 Resin 1-surface posterior; D2392 Resin 2-surface posterior; D2393 Resin 3-surface posterior; D2394 Resin 4+ surface posterior; D2740 Porcelain crown; D2750 PFM crown; D2930 Stainless steel crown (primary); D3310 RCT anterior; D3320 RCT premolar; D3330 RCT molar; D4210 Gingivectomy 4+ teeth per quad; D4211 Gingivectomy 1-3 teeth per quad; D4240 Pedicle soft tissue graft; D4241 Palatal connective tissue graft; D4260 Osseous surgery 4+ teeth per quad; D4261 Osseous surgery 1-3 teeth per quad; D4341 SRP 4+ teeth per quad; D4342 SRP 1-3 teeth per quad; D4346 Scaling in presence of generalized moderate/severe gingivitis; D4910 Periodontal maintenance; D5110 Complete upper denture; D5120 Complete lower denture; D5211 Upper partial resin; D5212 Lower partial resin; D5213 Upper partial cast metal; D5214 Lower partial cast metal; D6010 Implant placement; D6065 Implant-supported porcelain/ceramic crown; D7140 Extraction, erupted tooth; D7210 Surgical extraction; D7240 Removal of impacted tooth, completely bony; D7241 Removal of impacted tooth, partially bony with difficult access; D8010 Limited ortho, primary dentition; D8080 Comprehensive ortho, adolescent; D8090 Comprehensive ortho, adult; D9930 Treatment of complications from previous procedures.
+
+Pre-auth rules at NYUCD: Pre-authorization is required for most insurance-covered restorations (crowns, onlays, multi-surface composites on posterior teeth), periodontal surgery, and removable prosthetics. Implants almost always require pre-auth. Submit pre-auth before scheduling; typical approval turnaround is 3–4 weeks. If pre-auth is denied, discuss alternatives with attending before informing patient. Some Medicaid plans do not cover certain restorations — confirm coverage first. Document submission date and reference number in AxiUm.
+
+Lab coordination: Crown impressions → lab → 2-week turnaround → bisque bake try-in → final delivery. Partial and complete denture cases: preliminary impressions → custom tray → final impressions → jaw relation records → wax try-in → delivery. Always confirm lab due date with the lab technician and communicate to patient. Lab rush requests (5–7 days) require attending approval. Pick up all lab cases on time — uncollected cases hold up scheduling.
+
+NYUCD requirements tracking: D3 students must complete comp exam (D0150) + perio assessment (D4341/D4342/D4346) on every new comprehensive care patient before any definitive treatment. Faculty sign-off required for each completed requirement. D4 students are expected to manage multi-disciplinary cases. Graduation requirements vary by discipline; use the Requirements tab for exact counts. If a requirement count seems off, check whether visits were logged with the correct discipline tag.
+
 ESCALATION RULES — STRICTLY FOLLOW:
 - Any question involving a clinical diagnosis, treatment planning decision, medication dosage, patient safety concern, or judgment call that requires faculty oversight must end with: "Check with your attending on this one."
 - Never give a definitive clinical recommendation. You can explain what something is or how a procedure typically works, but you cannot advise on whether to proceed.
@@ -1208,6 +1227,63 @@ RESPONSE RULES:
       download:"ClinIQ_Roster_Export.csv",
     });
     a.click();
+  };
+
+  const parseCSVFile = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const text = e.target.result;
+      const lines = text.split(/\r?\n/).filter(l=>l.trim());
+      if (lines.length < 2) { reject("CSV must have a header row and at least one data row."); return; }
+      const headers = lines[0].split(",").map(h=>h.trim().replace(/^"|"$/g,""));
+      const rows = lines.slice(1).map(line=>{
+        const cols = line.match(/("(?:[^"]|"")*"|[^,]*)/g)||[];
+        return headers.reduce((obj,h,i)=>{
+          obj[h]=(cols[i]||"").trim().replace(/^"|"$/g,"").replace(/""/g,'"');
+          return obj;
+        },{});
+      });
+      resolve({ headers, rows });
+    };
+    reader.onerror = () => reject("Failed to read file.");
+    reader.readAsText(file);
+  });
+
+  const buildImportPreview = (rows, mapping) => {
+    return rows.slice(0, 5).map(row => ({
+      chartNumber: row[mapping.chartNumber]||"",
+      lastVisit:   row[mapping.lastVisit]||"",
+      procedure:   row[mapping.procedure]||"",
+      discipline:  row[mapping.discipline]||"",
+    }));
+  };
+
+  const runImport = async () => {
+    setImportLoading(true);
+    try {
+      const payload = importRawRows.map(row => ({
+        chartNumber: row[importMapping.chartNumber]||"",
+        lastVisit:   row[importMapping.lastVisit]||"",
+        procedure:   row[importMapping.procedure]||"",
+        discipline:  row[importMapping.discipline]||"",
+      }));
+      const res = await fetch("/api/patients/import", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ rows: payload })
+      });
+      const data = await res.json();
+      setImportResult(data);
+      setImportStep(4);
+      if (data.created > 0) {
+        const updated = await fetch("/api/patients").then(r=>r.json());
+        setPatients(updated);
+      }
+    } catch(err) {
+      showError("Import failed — please try again.");
+    } finally {
+      setImportLoading(false);
+    }
   };
 
   const filtered = (filter==="All" ? patients
@@ -1392,10 +1468,6 @@ RESPONSE RULES:
                   <div onClick={()=>setMenuOpen(false)} style={{ position:"fixed", inset:0, zIndex:199 }}/>
                   <div style={{ position:"absolute", top:44, left:0, background:"white", borderRadius:14, boxShadow:"0 8px 32px rgba(87,6,140,0.15)", border:`1px solid ${NYU.gray100}`, width:220, padding:"6px 0", zIndex:200, animation:"slideUp 0.15s ease" }}>
                     {[
-                      { label:"Patient Roster", icon:"📋", action:()=>{ setShowRosterPanel(true); setFilter("All"); setMenuOpen(false); } },
-                      { label:"Graduation Goals", icon:"🎓", action:()=>{ setShowGoalsPanel(true); setMenuOpen(false); } },
-                      { label:"Notebook", icon:"📓", action:()=>{ setTab("notebook"); setMenuOpen(false); } },
-                      { label:"Calendar", icon:"📅", action:()=>{ setTab("calendar"); setMenuOpen(false); } },
                       { label:"Paired Provider View", icon:"🤝", action:()=>{ setShowPairedPanel(true); setMenuOpen(false); } },
                       { label:"Urgent Patients", icon:"⚠️", action:()=>{ setTab("roster"); setFilter("Urgent"); setMenuOpen(false); setShowUrgentPanel(true); } },
                     ].map((item,i)=>(
@@ -1407,6 +1479,7 @@ RESPONSE RULES:
                     <div style={{ height:1, background:NYU.gray100, margin:"4px 12px" }}/>
                     {[
                       { label:"Add Patient", icon:"➕", action:()=>{ setShowAddModal(true); setMenuOpen(false); } },
+                      { label:"Import Roster", icon:"📂", action:()=>{ setShowImportModal(true); setImportStep(1); setMenuOpen(false); } },
                       { label:"Export Roster", icon:"📥", action:()=>{ exportRoster(); setMenuOpen(false); } },
                     ].map((item,i)=>(
                       <button key={i} onClick={item.action} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.gray900, fontFamily:"'Inter', sans-serif", textAlign:"left" }}
@@ -1458,17 +1531,7 @@ RESPONSE RULES:
             )}
           </div>
 
-          {/* ── STATS ── */}
-          {tab!=="notebook"&&tab!=="calendar"&&(
-            <div className="stats-grid" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:14, marginBottom:24 }}>
-              {stats.map(s=>(
-                <div key={s.label} style={{ background:"white", borderRadius:14, padding:"18px 20px", border:`1px solid ${NYU.gray100}` }}>
-                  <div style={{ fontSize:30, fontWeight:700, color:NYU.gray900, fontFamily:"'Fraunces', serif", lineHeight:1 }}>{s.value}</div>
-                  <div style={{ fontSize:12, color:NYU.gray400, marginTop:6, fontWeight:500 }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* ── STATS (hidden — shown in Caseload Intelligence panel) ── */}
 
           {/* ── CASELOAD INTELLIGENCE PANEL (replaces both velocity banner + urgent banner) ── */}
           {tab!=="notebook"&&tab!=="calendar"&&(
@@ -2372,9 +2435,6 @@ RESPONSE RULES:
             <button className="action-btn" onClick={()=>{ setShowAddModal(true); setShowRosterPanel(false); }} style={{ background:T.purple,color:"white",fontSize:12,padding:"7px 16px" }}>+ Add Patient</button>
           </div>
           <div style={{ maxWidth:1100,margin:"0 auto",padding:"28px 32px 80px" }}>
-            <div className="stats-grid" style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:14,marginBottom:24 }}>
-              {stats.map(s=>(<div key={s.label} style={{ background:"white",borderRadius:14,padding:"18px 20px",border:`1px solid ${NYU.gray100}` }}><div style={{ fontSize:30,fontWeight:700,color:NYU.gray900,fontFamily:"'Fraunces', serif",lineHeight:1 }}>{s.value}</div><div style={{ fontSize:12,color:NYU.gray400,marginTop:6,fontWeight:500 }}>{s.label}</div></div>))}
-            </div>
             <div style={{ display:"flex",gap:8,marginBottom:20,flexWrap:"wrap" }}>
               {["All","Active","Urgent","F/U Needed","Complete"].map(f=>(<button key={f} className="filter-btn" onClick={()=>setFilter(f)} style={{ background:filter===f?T.purple:NYU.gray100,color:filter===f?"white":NYU.gray600,border:"none",fontSize:12,padding:"6px 14px" }}>{f}</button>))}
             </div>
@@ -2799,28 +2859,36 @@ RESPONSE RULES:
               {(()=>{
                 const phaseNudge = getPhaseNudge(patient);
                 const predAppt = getPredictedNextAppt(patient);
+                const isOpen = expandedSections.includes("treatmentPhase");
                 return (
-                  <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
-                    <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
-                      <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Treatment Phase</div>
-                      {phaseNudge&&<span style={{ fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:99,background:phaseNudge.level==="overdue"?"#fee2e2":phaseNudge.level==="due"?"#fef9c3":"#dcfce7",color:phaseNudge.level==="overdue"?NYU.red:phaseNudge.level==="due"?"#92400e":"#15803d" }}>{phaseNudge.label}</span>}
-                    </div>
-                    <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:12 }}>
-                      {Object.entries(TREATMENT_PHASES).map(([key,ph])=>{
-                        const active = (patient.treatmentPhase||"IV")===key;
-                        return <button key={key} className="pill-btn" onClick={()=>updateField(patient.id,"treatmentPhase",key)} style={{ background:active?T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11,fontWeight:600 }}>{key}: {ph.label}</button>;
-                      })}
-                    </div>
-                    {patient.treatmentPhase&&TREATMENT_PHASES[patient.treatmentPhase]&&(
-                      <div style={{ fontSize:12,color:NYU.gray500,background:NYU.gray50,borderRadius:8,padding:"8px 12px",lineHeight:1.5 }}>
-                        {TREATMENT_PHASES[patient.treatmentPhase].description}
-                        {TREATMENT_PHASES[patient.treatmentPhase].followUpDays&&<span style={{ marginLeft:6,fontSize:11,fontWeight:600,color:T.purple }}>· Recall every {TREATMENT_PHASES[patient.treatmentPhase].followUpDays} days</span>}
+                  <div style={{ background:"white",borderRadius:16,marginBottom:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
+                    <div onClick={()=>setExpandedSections(prev=>isOpen?prev.filter(s=>s!=="treatmentPhase"):[...prev,"treatmentPhase"])} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",cursor:"pointer" }}>
+                      <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                        <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Treatment Phase</div>
+                        {phaseNudge&&<span style={{ fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:99,background:phaseNudge.level==="overdue"?"#fee2e2":phaseNudge.level==="due"?"#fef9c3":"#dcfce7",color:phaseNudge.level==="overdue"?NYU.red:phaseNudge.level==="due"?"#92400e":"#15803d" }}>{phaseNudge.label}</span>}
                       </div>
-                    )}
-                    {predAppt&&(
-                      <div style={{ marginTop:12,fontSize:12,color:NYU.gray600,display:"flex",alignItems:"center",gap:6 }}>
-                        <span style={{ fontSize:14 }}>🔮</span>
-                        <span><b>Predicted next visit:</b> {predAppt.date} ({predAppt.day}) — based on {predAppt.sampleSize} prior visits</span>
+                      <span style={{ fontSize:14,color:NYU.gray400,transition:"transform 0.18s",transform:isOpen?"rotate(90deg)":"rotate(0deg)" }}>›</span>
+                    </div>
+                    {isOpen&&(
+                      <div style={{ padding:"0 20px 18px" }}>
+                        <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:12 }}>
+                          {Object.entries(TREATMENT_PHASES).map(([key,ph])=>{
+                            const active = (patient.treatmentPhase||"IV")===key;
+                            return <button key={key} className="pill-btn" onClick={()=>updateField(patient.id,"treatmentPhase",key)} style={{ background:active?T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11,fontWeight:600 }}>{key}: {ph.label}</button>;
+                          })}
+                        </div>
+                        {patient.treatmentPhase&&TREATMENT_PHASES[patient.treatmentPhase]&&(
+                          <div style={{ fontSize:12,color:NYU.gray500,background:NYU.gray50,borderRadius:8,padding:"8px 12px",lineHeight:1.5 }}>
+                            {TREATMENT_PHASES[patient.treatmentPhase].description}
+                            {TREATMENT_PHASES[patient.treatmentPhase].followUpDays&&<span style={{ marginLeft:6,fontSize:11,fontWeight:600,color:T.purple }}>· Recall every {TREATMENT_PHASES[patient.treatmentPhase].followUpDays} days</span>}
+                          </div>
+                        )}
+                        {predAppt&&(
+                          <div style={{ marginTop:12,fontSize:12,color:NYU.gray600,display:"flex",alignItems:"center",gap:6 }}>
+                            <span style={{ fontSize:14 }}>🔮</span>
+                            <span><b>Predicted next visit:</b> {predAppt.date} ({predAppt.day}) — based on {predAppt.sampleSize} prior visits</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2830,30 +2898,38 @@ RESPONSE RULES:
               {/* Specialty Referral */}
               {(()=>{
                 const specNudge = getSpecialtyNudge(patient);
+                const isOpen = expandedSections.includes("specialtyReferral");
                 return (
-                  <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
-                    <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
-                      <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Specialty Referral</div>
-                      {specNudge&&<span style={{ fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:99,background:specNudge.level==="overdue"?"#fee2e2":specNudge.level==="due"?"#fef9c3":"#dcfce7",color:specNudge.level==="overdue"?NYU.red:specNudge.level==="due"?"#92400e":"#15803d" }}>{specNudge.label}</span>}
+                  <div style={{ background:"white",borderRadius:16,marginBottom:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
+                    <div onClick={()=>setExpandedSections(prev=>isOpen?prev.filter(s=>s!=="specialtyReferral"):[...prev,"specialtyReferral"])} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",cursor:"pointer" }}>
+                      <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                        <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Specialty Referral</div>
+                        {specNudge&&<span style={{ fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:99,background:specNudge.level==="overdue"?"#fee2e2":specNudge.level==="due"?"#fef9c3":"#dcfce7",color:specNudge.level==="overdue"?NYU.red:specNudge.level==="due"?"#92400e":"#15803d" }}>{specNudge.label}</span>}
+                      </div>
+                      <span style={{ fontSize:14,color:NYU.gray400,transition:"transform 0.18s",transform:isOpen?"rotate(90deg)":"rotate(0deg)" }}>›</span>
                     </div>
-                    <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:10 }}>
-                      {["None",...SPECIALTY_TYPES].map(t=>{
-                        const active=(patient.specialtyType||"None")===t;
-                        return <button key={t} className="pill-btn" onClick={()=>updateField(patient.id,"specialtyType",t==="None"?null:t)} style={{ background:active?T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11 }}>{t}</button>;
-                      })}
-                    </div>
-                    {patient.specialtyType&&patient.specialtyType!=="None"&&(
-                      <div style={{ display:"flex",flexDirection:"column",gap:10,marginTop:8 }}>
-                        <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-                          {SPECIALTY_STATUSES.map(s=>{
-                            const active=(patient.specialtyStatus||"Pending")===s;
-                            const colors={Pending:"#f59e0b",Scheduled:"#3b82f6","Awaiting Report":"#8b5cf6",Completed:"#10b981"};
-                            return <button key={s} className="pill-btn" onClick={()=>updateField(patient.id,"specialtyStatus",s)} style={{ background:active?colors[s]||T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11 }}>{s}</button>;
+                    {isOpen&&(
+                      <div style={{ padding:"0 20px 18px" }}>
+                        <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:10 }}>
+                          {["None",...SPECIALTY_TYPES].map(t=>{
+                            const active=(patient.specialtyType||"None")===t;
+                            return <button key={t} className="pill-btn" onClick={()=>updateField(patient.id,"specialtyType",t==="None"?null:t)} style={{ background:active?T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11 }}>{t}</button>;
                           })}
                         </div>
-                        <div style={{ display:"flex",gap:10 }}>
-                          <div style={{ flex:1 }}><label style={{ ...labelStyle,fontSize:10,marginBottom:4 }}>Referral Date</label><input type="date" style={{ ...inputStyle,fontSize:12,padding:"6px 10px" }} value={patient.specialtyReferralDate||""} onChange={e=>updateField(patient.id,"specialtyReferralDate",e.target.value)}/></div>
-                        </div>
+                        {patient.specialtyType&&patient.specialtyType!=="None"&&(
+                          <div style={{ display:"flex",flexDirection:"column",gap:10,marginTop:8 }}>
+                            <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                              {SPECIALTY_STATUSES.map(s=>{
+                                const active=(patient.specialtyStatus||"Pending")===s;
+                                const colors={Pending:"#f59e0b",Scheduled:"#3b82f6","Awaiting Report":"#8b5cf6",Completed:"#10b981"};
+                                return <button key={s} className="pill-btn" onClick={()=>updateField(patient.id,"specialtyStatus",s)} style={{ background:active?colors[s]||T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11 }}>{s}</button>;
+                              })}
+                            </div>
+                            <div style={{ display:"flex",gap:10 }}>
+                              <div style={{ flex:1 }}><label style={{ ...labelStyle,fontSize:10,marginBottom:4 }}>Referral Date</label><input type="date" style={{ ...inputStyle,fontSize:12,padding:"6px 10px" }} value={patient.specialtyReferralDate||""} onChange={e=>updateField(patient.id,"specialtyReferralDate",e.target.value)}/></div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2861,8 +2937,12 @@ RESPONSE RULES:
               })()}
 
               {/* Lab & Pre-Auth with date fields + nudge indicators */}
-              <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900,marginBottom:14 }}>Lab & Pre-Auth</div>
+              <div style={{ background:"white",borderRadius:16,marginBottom:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
+                <div onClick={()=>setExpandedSections(prev=>prev.includes("labPreAuth")?prev.filter(s=>s!=="labPreAuth"):[...prev,"labPreAuth"])} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",cursor:"pointer" }}>
+                  <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Lab & Pre-Auth</div>
+                  <span style={{ fontSize:14,color:NYU.gray400,transition:"transform 0.18s",transform:expandedSections.includes("labPreAuth")?"rotate(90deg)":"rotate(0deg)" }}>›</span>
+                </div>
+                {expandedSections.includes("labPreAuth")&&<div style={{ padding:"0 20px 18px" }}>
 
                 {/* Lab */}
                 <div style={{ marginBottom:16 }}>
@@ -2915,14 +2995,19 @@ RESPONSE RULES:
                     </div>
                   )}
                 </div>
+                </div>}
               </div>
 
               {/* Visit History */}
-              <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+              <div style={{ background:"white",borderRadius:16,marginBottom:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
+                <div onClick={()=>setExpandedSections(prev=>prev.includes("visitHistory")?prev.filter(s=>s!=="visitHistory"):[...prev,"visitHistory"])} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",cursor:"pointer" }}>
                   <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Visit History</div>
-                  <span style={{ fontSize:11,color:NYU.gray400 }}>{patient.visitLog?.length||0} visit{(patient.visitLog?.length||0)!==1?"s":""}</span>
+                  <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                    <span style={{ fontSize:11,color:NYU.gray400 }}>{patient.visitLog?.length||0} visit{(patient.visitLog?.length||0)!==1?"s":""}</span>
+                    <span style={{ fontSize:14,color:NYU.gray400,transition:"transform 0.18s",transform:expandedSections.includes("visitHistory")?"rotate(90deg)":"rotate(0deg)" }}>›</span>
+                  </div>
                 </div>
+                {expandedSections.includes("visitHistory")&&<div style={{ padding:"0 20px 18px" }}>
                 {(!patient.visitLog||patient.visitLog.length===0)?(
                   <div style={{ fontSize:13,color:NYU.gray400,textAlign:"center",padding:"20px 0" }}>
                     <div style={{ fontSize:28,marginBottom:8 }}>📋</div>No visits logged yet
@@ -2963,17 +3048,29 @@ RESPONSE RULES:
                     ))}
                   </div>
                 )}
+                </div>}
               </div>
 
               {/* Notes */}
-              <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900,marginBottom:12 }}>Notes</div>
-                <textarea rows={3} value={patient.notes} onChange={e=>updateField(patient.id,"notes",e.target.value)} style={{ ...inputStyle,resize:"vertical",fontSize:13 }} placeholder="Add notes about this patient..."/>
+              <div style={{ background:"white",borderRadius:16,marginBottom:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
+                <div onClick={()=>setExpandedSections(prev=>prev.includes("notes")?prev.filter(s=>s!=="notes"):[...prev,"notes"])} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",cursor:"pointer" }}>
+                  <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Notes</div>
+                  <span style={{ fontSize:14,color:NYU.gray400,transition:"transform 0.18s",transform:expandedSections.includes("notes")?"rotate(90deg)":"rotate(0deg)" }}>›</span>
+                </div>
+                {expandedSections.includes("notes")&&(
+                  <div style={{ padding:"0 20px 18px" }}>
+                    <textarea rows={3} value={patient.notes} onChange={e=>updateField(patient.id,"notes",e.target.value)} style={{ ...inputStyle,resize:"vertical",fontSize:13 }} placeholder="Add notes about this patient..."/>
+                  </div>
+                )}
               </div>
 
               {/* Patient Language */}
-              <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900,marginBottom:12 }}>🌐 Patient Language</div>
+              <div style={{ background:"white",borderRadius:16,marginBottom:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
+                <div onClick={()=>setExpandedSections(prev=>prev.includes("patientLanguage")?prev.filter(s=>s!=="patientLanguage"):[...prev,"patientLanguage"])} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",cursor:"pointer" }}>
+                  <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>🌐 Patient Language</div>
+                  <span style={{ fontSize:14,color:NYU.gray400,transition:"transform 0.18s",transform:expandedSections.includes("patientLanguage")?"rotate(90deg)":"rotate(0deg)" }}>›</span>
+                </div>
+                {expandedSections.includes("patientLanguage")&&<div style={{ padding:"0 20px 18px" }}>
                 <div style={{ marginBottom:8 }}>
                   <label style={labelStyle}>Preferred Language</label>
                   <select style={{ ...inputStyle,fontSize:13,padding:"8px 10px" }} value={patient.patientLanguage||"English"} onChange={e=>updateField(patient.id,"patientLanguage",e.target.value)}>
@@ -2985,19 +3082,24 @@ RESPONSE RULES:
                     💬 ClinIQ assistant can translate patient instructions and post-op care into <strong>{patient.patientLanguage}</strong>. Ask it: "Explain the post-op care for {patient.alias} in {patient.patientLanguage}."
                   </div>
                 )}
+                </div>}
               </div>
 
               {/* Paired Provider */}
-              <div style={{ background:"white",borderRadius:16,padding:"18px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}` }}>
-                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
-                  <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>🤝 Paired Provider</div>
-                  {patient.isPrimaryProvider!==false
-                    ? <span style={{ fontSize:11,padding:"3px 10px",borderRadius:99,background:"#ccfbf1",color:"#0f766e",fontWeight:700 }}>You are the primary provider</span>
-                    : patient.handoffPartner
-                      ? <span style={{ fontSize:11,padding:"3px 10px",borderRadius:99,background:NYU.gray100,color:NYU.gray500,fontWeight:600 }}>Supporting role</span>
-                      : <span style={{ fontSize:11,padding:"3px 10px",borderRadius:99,background:NYU.gray100,color:NYU.gray400,fontWeight:600 }}>Not Assigned</span>
-                  }
+              <div style={{ background:"white",borderRadius:16,marginBottom:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
+                <div onClick={()=>setExpandedSections(prev=>prev.includes("pairedProvider")?prev.filter(s=>s!=="pairedProvider"):[...prev,"pairedProvider"])} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",cursor:"pointer" }}>
+                  <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                    <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>🤝 Paired Provider</div>
+                    {patient.isPrimaryProvider!==false
+                      ? <span style={{ fontSize:11,padding:"3px 10px",borderRadius:99,background:"#ccfbf1",color:"#0f766e",fontWeight:700 }}>Primary</span>
+                      : patient.handoffPartner
+                        ? <span style={{ fontSize:11,padding:"3px 10px",borderRadius:99,background:NYU.gray100,color:NYU.gray500,fontWeight:600 }}>Supporting</span>
+                        : null
+                    }
+                  </div>
+                  <span style={{ fontSize:14,color:NYU.gray400,transition:"transform 0.18s",transform:expandedSections.includes("pairedProvider")?"rotate(90deg)":"rotate(0deg)" }}>›</span>
                 </div>
+                {expandedSections.includes("pairedProvider")&&<div style={{ padding:"0 20px 18px" }}>
                 {/* Primary provider toggle */}
                 <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",padding:"10px 12px",borderRadius:10,background:patient.isPrimaryProvider!==false?T.lavender:"#f9fafb",border:`1.5px solid ${patient.isPrimaryProvider!==false?T.purpleLight:NYU.gray200}`,marginBottom:14,transition:"all 0.15s" }}>
                   <input type="checkbox" checked={patient.isPrimaryProvider!==false} onChange={e=>updateField(patient.id,"isPrimaryProvider",e.target.checked)} style={{ width:16,height:16,accentColor:T.purple,cursor:"pointer" }}/>
@@ -3040,6 +3142,7 @@ RESPONSE RULES:
                     {patient.handoffNotes&&<div style={{ marginTop:8,padding:"8px 10px",background:"white",borderRadius:8,fontSize:12,color:NYU.gray700,border:`1px solid ${NYU.gray100}` }}>📝 {patient.handoffNotes}</div>}
                   </div>
                 )}
+                </div>}
               </div>
 
               {/* Mark Complete */}
@@ -3071,6 +3174,125 @@ RESPONSE RULES:
           </div>
         );
       })()}
+
+      {/* ── CSV IMPORT MODAL ── */}
+      {showImportModal&&(
+        <>
+          <div onClick={()=>{ setShowImportModal(false); setImportStep(1); setImportRawRows([]); setImportHeaders([]); setImportResult(null); }} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2900 }}/>
+          <div style={{ position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:2901,background:"white",borderRadius:20,padding:"28px 28px",maxWidth:520,width:"92%",boxShadow:"0 8px 40px rgba(0,0,0,0.2)",maxHeight:"90vh",overflowY:"auto" }}>
+            {/* Header */}
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20 }}>
+              <div>
+                <div style={{ fontWeight:700,fontSize:18,color:NYU.gray900,fontFamily:"'Fraunces',serif" }}>Import Roster</div>
+                <div style={{ fontSize:12,color:NYU.gray400,marginTop:2 }}>Step {importStep} of 4</div>
+              </div>
+              <button onClick={()=>{ setShowImportModal(false); setImportStep(1); setImportRawRows([]); setImportHeaders([]); setImportResult(null); }} style={{ background:"none",border:"none",cursor:"pointer",fontSize:20,color:NYU.gray400,lineHeight:1 }}>×</button>
+            </div>
+            {/* Progress */}
+            <div style={{ display:"flex",gap:6,marginBottom:24 }}>
+              {[1,2,3,4].map(s=>(
+                <div key={s} style={{ flex:1,height:4,borderRadius:99,background:s<=importStep?T.purple:NYU.gray200,transition:"background 0.3s" }}/>
+              ))}
+            </div>
+
+            {/* Step 1: Upload */}
+            {importStep===1&&(
+              <div>
+                <div style={{ fontWeight:600,fontSize:14,color:NYU.gray900,marginBottom:8 }}>Upload your CSV file</div>
+                <div style={{ fontSize:13,color:NYU.gray500,marginBottom:16,lineHeight:1.5 }}>Your CSV should have column headers in the first row. At minimum, include chart number, last visit date, procedure, and discipline columns. Export from AxiUm or any spreadsheet.</div>
+                <label style={{ display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:"32px 24px",border:`2px dashed ${NYU.gray200}`,borderRadius:14,cursor:"pointer",background:NYU.gray50,transition:"border-color 0.2s" }}
+                  onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor=T.purple;}}
+                  onDragLeave={e=>{e.currentTarget.style.borderColor=NYU.gray200;}}
+                  onDrop={async e=>{ e.preventDefault(); e.currentTarget.style.borderColor=NYU.gray200; const file=e.dataTransfer.files[0]; if(!file) return; try{ const {headers,rows}=await parseCSVFile(file); setImportHeaders(headers); setImportRawRows(rows); const autoMap={}; ["chartNumber","lastVisit","procedure","discipline"].forEach(f=>{ const match=headers.find(h=>h.toLowerCase().replace(/[\s_-]/g,"").includes(f.replace(/([A-Z])/g,c=>c.toLowerCase()))); if(match) autoMap[f]=match; }); setImportMapping(autoMap); setImportStep(2); }catch(err){ showError(err); } }}>
+                  <span style={{ fontSize:36 }}>📂</span>
+                  <div style={{ fontWeight:600,fontSize:14,color:NYU.gray700 }}>Drop CSV here or click to browse</div>
+                  <div style={{ fontSize:12,color:NYU.gray400 }}>Accepts .csv files</div>
+                  <input type="file" accept=".csv" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; try{ const {headers,rows}=await parseCSVFile(file); setImportHeaders(headers); setImportRawRows(rows); const autoMap={}; ["chartNumber","lastVisit","procedure","discipline"].forEach(f=>{ const match=headers.find(h=>h.toLowerCase().replace(/[\s_-]/g,"").includes(f.replace(/([A-Z])/g,c=>c.toLowerCase()))); if(match) autoMap[f]=match; }); setImportMapping(autoMap); setImportStep(2); }catch(err){ showError(err); } }}/>
+                </label>
+                <div style={{ marginTop:16,fontSize:12,color:NYU.gray400 }}>
+                  <strong>Tip:</strong> Export from AxiUm → Reports → Patient List → Save as CSV. Column names don't have to match exactly — you'll map them in the next step.
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Map columns */}
+            {importStep===2&&(
+              <div>
+                <div style={{ fontWeight:600,fontSize:14,color:NYU.gray900,marginBottom:4 }}>Map your columns</div>
+                <div style={{ fontSize:13,color:NYU.gray500,marginBottom:16 }}>{importRawRows.length} rows detected. Tell ClinIQ which column contains each field.</div>
+                {[
+                  { key:"chartNumber", label:"Chart Number", required:false },
+                  { key:"lastVisit",   label:"Last Visit Date", required:false },
+                  { key:"procedure",   label:"Procedure / Treatment", required:false },
+                  { key:"discipline",  label:"Discipline", required:false },
+                ].map(f=>(
+                  <div key={f.key} style={{ marginBottom:14 }}>
+                    <label style={{ ...labelStyle,marginBottom:6 }}>{f.label}{f.required&&<span style={{ color:NYU.red }}>*</span>}</label>
+                    <select style={inputStyle} value={importMapping[f.key]||""} onChange={e=>setImportMapping(prev=>({...prev,[f.key]:e.target.value}))}>
+                      <option value="">— skip this field —</option>
+                      {importHeaders.map(h=><option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                ))}
+                <div style={{ display:"flex",gap:10,marginTop:20 }}>
+                  <button className="action-btn" onClick={()=>setImportStep(1)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>← Back</button>
+                  <button className="action-btn" onClick={()=>{ setImportPreview(buildImportPreview(importRawRows,importMapping)); setImportStep(3); }} style={{ flex:2,background:T.purple,color:"white" }}>Preview →</button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Preview */}
+            {importStep===3&&(
+              <div>
+                <div style={{ fontWeight:600,fontSize:14,color:NYU.gray900,marginBottom:4 }}>Preview</div>
+                <div style={{ fontSize:13,color:NYU.gray500,marginBottom:16 }}>Showing first {importPreview.length} of {importRawRows.length} rows. Verify the data looks correct before importing.</div>
+                <div style={{ overflowX:"auto",borderRadius:10,border:`1px solid ${NYU.gray200}`,marginBottom:16 }}>
+                  <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12 }}>
+                    <thead>
+                      <tr style={{ background:NYU.gray50 }}>
+                        {["Chart #","Last Visit","Procedure","Discipline"].map(h=>(
+                          <th key={h} style={{ padding:"8px 12px",textAlign:"left",color:NYU.gray400,fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:"0.04em",borderBottom:`1px solid ${NYU.gray200}` }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.map((row,i)=>(
+                        <tr key={i} style={{ borderBottom:i<importPreview.length-1?`1px solid ${NYU.gray100}`:"none" }}>
+                          <td style={{ padding:"8px 12px",color:NYU.gray900 }}>{row.chartNumber||<span style={{ color:NYU.gray300 }}>—</span>}</td>
+                          <td style={{ padding:"8px 12px",color:NYU.gray900 }}>{row.lastVisit||<span style={{ color:NYU.gray300 }}>—</span>}</td>
+                          <td style={{ padding:"8px 12px",color:NYU.gray900 }}>{row.procedure||<span style={{ color:NYU.gray300 }}>—</span>}</td>
+                          <td style={{ padding:"8px 12px",color:NYU.gray900 }}>{row.discipline||<span style={{ color:NYU.gray300 }}>—</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ background:"#fef9c3",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#92400e",marginBottom:16 }}>
+                  ⚠️ This will create <strong>{importRawRows.length} new patient records</strong> in your caseload. Existing patients will not be affected.
+                </div>
+                <div style={{ display:"flex",gap:10 }}>
+                  <button className="action-btn" onClick={()=>setImportStep(2)} style={{ flex:1,background:"white",color:NYU.gray600,border:`1.5px solid ${NYU.gray200}` }}>← Back</button>
+                  <button className="action-btn" onClick={runImport} disabled={importLoading} style={{ flex:2,background:T.purple,color:"white",opacity:importLoading?0.6:1 }}>{importLoading?"Importing…":"Import All →"}</button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Result */}
+            {importStep===4&&importResult&&(
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontSize:48,marginBottom:12 }}>{importResult.created>0?"✅":"⚠️"}</div>
+                <div style={{ fontWeight:700,fontSize:20,color:NYU.gray900,marginBottom:8,fontFamily:"'Fraunces',serif" }}>
+                  {importResult.created>0?`${importResult.created} patients imported!`:"Import complete"}
+                </div>
+                {importResult.skipped>0&&<div style={{ fontSize:13,color:NYU.gray500,marginBottom:4 }}>{importResult.skipped} rows skipped (empty or invalid)</div>}
+                {importResult.errors&&importResult.errors.length>0&&<div style={{ fontSize:12,color:NYU.red,marginBottom:8 }}>{importResult.errors[0]}</div>}
+                <div style={{ fontSize:13,color:NYU.gray500,marginBottom:24 }}>Your roster has been updated. Edit each patient record to fill in additional details.</div>
+                <button className="action-btn" onClick={()=>{ setShowImportModal(false); setImportStep(1); setImportRawRows([]); setImportHeaders([]); setImportResult(null); }} style={{ background:T.purple,color:"white",padding:"10px 28px",fontSize:14 }}>Done</button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* ── CONFIRM DELETE MODAL ── */}
       {confirmDelete&&(
@@ -3198,6 +3420,7 @@ RESPONSE RULES:
                 <div style={{ color:"white",fontWeight:700,fontSize:14 }}>ClinIQ Assistant</div>
                 <div style={{ color:"rgba(255,255,255,0.6)",fontSize:11 }}>NYUCD · Caseload-aware · HIPAA-safe</div>
               </div>
+              <button onClick={()=>setChatInput("Show me the NYUCD clinical quick reference guide")} title="Clinical Reference Guide" style={{ background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,padding:"4px 8px",cursor:"pointer",color:"white",fontSize:11,fontWeight:600,fontFamily:"'Inter',sans-serif",marginRight:4 }}>📚</button>
               <button onClick={()=>setChatOpen(false)} style={{ background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"white",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center" }}>×</button>
             </div>
 
@@ -3589,6 +3812,14 @@ RESPONSE RULES:
                 <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
                   <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14 }}>Graduation</div>
                   <div><label style={labelStyle}>Expected Graduation Date</label><input type="date" style={inputStyle} value={settingsDraft.graduationDate} onChange={e=>setSettingsDraft(p=>({...p,graduationDate:e.target.value}))}/></div>
+                </div>
+                <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
+                  <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10 }}>Roster Data</div>
+                  <div style={{ fontSize:12,color:NYU.gray500,marginBottom:12,lineHeight:1.5 }}>Import patients from a CSV file (e.g. AxiUm export) or export your current roster.</div>
+                  <div style={{ display:"flex",gap:10 }}>
+                    <button className="action-btn" onClick={()=>{ setShowSettings(false); setShowImportModal(true); setImportStep(1); }} style={{ flex:1,background:T.purple,color:"white",fontSize:13 }}>📂 Import CSV</button>
+                    <button className="action-btn" onClick={()=>{ exportRoster(); }} style={{ flex:1,background:"white",color:NYU.gray700,border:`1.5px solid ${NYU.gray200}`,fontSize:13 }}>📥 Export CSV</button>
+                  </div>
                 </div>
                 <div style={{ background:"#fef9c3",borderRadius:14,padding:"16px 18px",border:"1px solid #fde047" }}>
                   <div style={{ fontSize:11,fontWeight:700,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10 }}>Demo Data</div>

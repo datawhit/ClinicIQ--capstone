@@ -30,6 +30,7 @@ Vite-based React application for NYU College of Dentistry patient tracking.
 - `POST /api/auth/logout` — destroy session
 - `GET /api/auth/me` — restore session on page load
 - `GET/POST /api/patients` — list / create patients
+- `POST /api/patients/import` — bulk CSV import (creates patients from mapped row array)
 - `PUT/DELETE /api/patients/:id` — update / delete patient
 - `POST /api/patients/:id/visits` — log a visit
 - `DELETE /api/patients/:id/visits/:visitId` — remove a visit
@@ -87,6 +88,11 @@ Vite-based React application for NYU College of Dentistry patient tracking.
 - **Error Toast System** — `errorToast` state + `showError(msg)` helper (auto-clears in 4s); red pill toast fixed at bottom center (zIndex 9999); wired into addPatient, logVisit, sendChat, loadUserData, settings save
 - **Add Patient modal new fields** — Patient Type pill selector (In-Clinic/Outreach/External), Referring Faculty text input, Treatment Phase dropdown — inserted after Discipline, before First Procedure; `emptyPatient` updated with `patientType:"In-Clinic"`, `referringFaculty:""`
 - **Graduation Goals 3-section view** — replaced discipline-group grouping with status-based sections: Needs Cases (amber), ✓ Complete (green), Not Started (hidden by default); `showAllGoals` toggle shows/hides Not Started section
+- **Collapsible Patient Detail Sections** — `expandedSections` state (default: `["visitHistory"]`); Treatment Phase, Specialty Referral, Lab & Pre-Auth, Notes, Patient Language, Paired Provider all start collapsed; Visit History starts expanded; each section header shows title + animated › chevron; click header to toggle
+- **Stats Grid Hidden** — main dashboard and Roster Panel no longer show the 5-stat grid row (data still computed for Caseload Intelligence panel and AI context); `STAT_DEFS` and `visibleStats` state still used for settings visibility control
+- **Simplified Hamburger Menu** — removed Patient Roster, Graduation Goals, Notebook, Calendar from menu; kept: Paired Provider View, Urgent Patients, Add Patient, Import Roster, Export Roster, Settings, Sign Out
+- **CSV Roster Import** — 4-step import modal (`showImportModal`, `importStep` 1–4): (1) drag-drop/file upload, (2) column mapping (chart number, last visit, procedure, discipline with auto-detect), (3) preview first 5 rows, (4) success/error result; `parseCSVFile()` reads CSV + parses headers; `buildImportPreview()` maps rows; `runImport()` POSTs to `/api/patients/import`; triggered from hamburger menu + Settings → Profile tab; server auto-generates alias from chart number or sequential ID
+- **NYUCD Clinical Knowledge Base** — expanded AI system prompt with full CDT code reference (D0150–D9930), pre-auth rules, lab coordination workflow, NYUCD requirements tracking; 📚 button in chat header pre-fills "Show me the NYUCD clinical quick reference guide"
 
 ## Theme System
 - `THEMES` constant — 6 presets, each overrides: purple, purpleDark, purpleDeep, purpleLight, purpleMid, accent, lavender
