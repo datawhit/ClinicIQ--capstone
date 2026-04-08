@@ -684,6 +684,11 @@ const css = `
   @keyframes bounce { from { transform: translateY(0) } to { transform: translateY(-5px) } }
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 8px; vertical-align: middle; }
   ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: ${NYU.gray200}; border-radius: 99px; }
+  /* Desktop baseline */
+  .page-inner { padding: 24px 32px 80px; }
+  .bottom-nav { display: flex; }
+  .float-ai-btn { bottom: 72px; right: 24px; }
+
   @media (max-width: 768px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
     .insights-grid { grid-template-columns: 1fr !important; }
@@ -700,6 +705,7 @@ const css = `
     .quick-log-panel { width: calc(100vw - 32px) !important; }
     .float-right { bottom: 16px !important; right: 16px !important; }
     .float-left { bottom: 16px !important; left: 16px !important; }
+    .float-ai-btn { bottom: 72px !important; right: 12px !important; }
     .intel-row { flex-direction: column !important; gap: 12px !important; }
     .intel-pct { text-align: left !important; }
     .action-btn { padding: 9px 14px !important; }
@@ -1491,7 +1497,7 @@ RESPONSE RULES:
 
         {/* Top Header */}
         <div style={{ background:"white", borderBottom:`1px solid ${NYU.gray100}`, position:"sticky", top:0, zIndex:100 }}>
-          <div className="top-bar" style={{ maxWidth:640, margin:"0 auto", padding:"0 20px", display:"flex", alignItems:"center", justifyContent:"space-between", height:56 }}>
+          <div className="top-bar" style={{ maxWidth:1100, margin:"0 auto", padding:"0 20px", display:"flex", alignItems:"center", justifyContent:"space-between", height:56 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, position:"relative" }}>
               <button onClick={()=>setMenuOpen(!menuOpen)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px 8px", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}
                 onMouseEnter={e=>e.currentTarget.style.background=NYU.gray100} onMouseLeave={e=>e.currentTarget.style.background="none"}>
@@ -1558,7 +1564,7 @@ RESPONSE RULES:
           </div>
         </div>
 
-        <div className="page-inner" style={{ maxWidth:640, margin:"0 auto" }}>
+        <div className="page-inner" style={{ maxWidth:1100, margin:"0 auto" }}>
 
           {/* ── OVERVIEW TAB ── */}
           {tab==="overview"&&(()=>{
@@ -3290,12 +3296,12 @@ RESPONSE RULES:
       })()}
 
       {/* ── FLOATING AI BUTTON ── */}
-      <button className="float-right" onClick={()=>setTab("ai")} style={{ position:"fixed",bottom:72,right:16,zIndex:2000,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},${T.purpleDark})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${T.purple}55`,fontSize:22 }} title="Ask AI">
+      <button className="float-right float-ai-btn" onClick={()=>setTab("ai")} style={{ position:"fixed",bottom:72,right:16,zIndex:2000,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},${T.purpleDark})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${T.purple}55`,fontSize:22 }} title="Ask AI">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="9" stroke="white" strokeWidth="1.6"/><path d="M7.5 11h.02M11 11h.02M14.5 11h.02" stroke="white" strokeWidth="2.2" strokeLinecap="round"/></svg>
       </button>
 
       {/* ── BOTTOM NAV ── */}
-      <div style={{ position:"fixed",bottom:0,left:0,right:0,height:56,background:"white",borderTop:"1px solid #f3f0f7",display:"flex",alignItems:"center",zIndex:1000,boxShadow:"0 -2px 12px rgba(83,74,183,0.07)" }}>
+      <div className="bottom-nav" style={{ position:"fixed",bottom:0,left:0,right:0,height:56,background:"white",borderTop:"1px solid #f3f0f7",alignItems:"center",zIndex:1000,boxShadow:"0 -2px 12px rgba(83,74,183,0.07)" }}>
         {[
           {key:"overview",   icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="5" width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="9.25" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="13.5" width="7" height="1.5" rx="0.75" fill="currentColor"/></svg>, label:"Overview"},
           {key:"directory",  icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="7.5" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.4"/><path d="M2 17c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M13 6.5c1.5 0 2.5 1 2.5 2.5S14.5 11.5 13 11.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M16.5 17c0-2-1-3.5-2.5-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>, label:"Directory"},
