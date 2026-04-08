@@ -221,7 +221,11 @@ app.post('/api/patients', requireAuth, async (req, res) => {
 app.post('/api/patients/import', requireAuth, async (req, res) => {
   const { rows } = req.body;
   if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'No rows provided' });
+  // Snapshot existing count once so aliases are assigned sequentially without re-querying inside the loop
+  const { rows: existingCount } = await pool.query('SELECT COUNT(*) FROM patients WHERE user_id=$1', [req.session.userId]);
+  let baseCount = parseInt(existingCount[0].count);
   let created = 0, skipped = 0, errors = [];
+  const year = new Date().getFullYear();
   for (const r of rows) {
     try {
       const chartNumber = (r.chartNumber || '').trim();
@@ -229,11 +233,10 @@ app.post('/api/patients/import', requireAuth, async (req, res) => {
       const discipline  = (r.discipline || 'General Dentistry').trim();
       const lastVisit   = (r.lastVisit || '').trim();
       if (!chartNumber && !procedure) { skipped++; continue; }
-      const { rows: existing } = await pool.query('SELECT COUNT(*) FROM patients WHERE user_id=$1', [req.session.userId]);
-      const count = parseInt(existing[0].count);
       const id = `PT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5)}`;
-      const year = new Date().getFullYear();
-      const alias = chartNumber ? `Chart-${chartNumber}` : `P-${year}-${String(count + 1).padStart(3, '0')}`;
+      // Always use P-YYYY-NNN format — chart number is stored separately, never used as the alias
+      const alias = `P-${year}-${String(baseCount + 1).padStart(3, '0')}`;
+      baseCount++;
       await pool.query(`
         INSERT INTO patients (id,user_id,alias,chart_number,procedure,discipline,last_visit,treatment_start,
           expected_completion,next_appt,next_appt_time,treatment_complete,lab_status,lab_sent_date,

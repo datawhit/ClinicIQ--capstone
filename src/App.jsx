@@ -1250,7 +1250,8 @@ RESPONSE RULES:
   });
 
   const buildImportPreview = (rows, mapping) => {
-    return rows.slice(0, 5).map(row => ({
+    return rows.slice(0, 5).map((row, index) => ({
+      alias:       generateAlias(patients.length + index),
       chartNumber: row[mapping.chartNumber]||"",
       lastVisit:   row[mapping.lastVisit]||"",
       procedure:   row[mapping.procedure]||"",
@@ -3250,18 +3251,19 @@ RESPONSE RULES:
                   <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12 }}>
                     <thead>
                       <tr style={{ background:NYU.gray50 }}>
-                        {["Chart #","Last Visit","Procedure","Discipline"].map(h=>(
-                          <th key={h} style={{ padding:"8px 12px",textAlign:"left",color:NYU.gray400,fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:"0.04em",borderBottom:`1px solid ${NYU.gray200}` }}>{h}</th>
+                        {["Alias","Chart #","Last Visit","Procedure","Discipline"].map(h=>(
+                          <th key={h} style={{ padding:"8px 10px",textAlign:"left",color:NYU.gray400,fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:"0.04em",borderBottom:`1px solid ${NYU.gray200}` }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {importPreview.map((row,i)=>(
                         <tr key={i} style={{ borderBottom:i<importPreview.length-1?`1px solid ${NYU.gray100}`:"none" }}>
-                          <td style={{ padding:"8px 12px",color:NYU.gray900 }}>{row.chartNumber||<span style={{ color:NYU.gray300 }}>—</span>}</td>
-                          <td style={{ padding:"8px 12px",color:NYU.gray900 }}>{row.lastVisit||<span style={{ color:NYU.gray300 }}>—</span>}</td>
-                          <td style={{ padding:"8px 12px",color:NYU.gray900 }}>{row.procedure||<span style={{ color:NYU.gray300 }}>—</span>}</td>
-                          <td style={{ padding:"8px 12px",color:NYU.gray900 }}>{row.discipline||<span style={{ color:NYU.gray300 }}>—</span>}</td>
+                          <td style={{ padding:"8px 10px",color:T.purple,fontWeight:600 }}>{row.alias}</td>
+                          <td style={{ padding:"8px 10px",color:NYU.gray500 }}>{row.chartNumber||<span style={{ color:NYU.gray300 }}>—</span>}</td>
+                          <td style={{ padding:"8px 10px",color:NYU.gray900 }}>{row.lastVisit||<span style={{ color:NYU.gray300 }}>—</span>}</td>
+                          <td style={{ padding:"8px 10px",color:NYU.gray900 }}>{row.procedure||<span style={{ color:NYU.gray300 }}>—</span>}</td>
+                          <td style={{ padding:"8px 10px",color:NYU.gray900 }}>{row.discipline||<span style={{ color:NYU.gray300 }}>—</span>}</td>
                         </tr>
                       ))}
                     </tbody>
