@@ -94,6 +94,18 @@ export async function initDb() {
       patient_alias TEXT,
       description TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS providers (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      role TEXT DEFAULT 'Faculty',
+      discipline TEXT DEFAULT 'General Dentistry',
+      phone TEXT DEFAULT '',
+      email TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
   // Migrate existing tables — safe to run multiple times
   await pool.query(`

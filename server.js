@@ -586,11 +586,19 @@ app.post('/api/demo/seed', requireAuth, async (req, res) => {
     { title:"Insurance resubmission — P-2026-004", body:"Pre-auth denied for SRP. Need to attach perio charting with 4mm+ pockets and radiographs. Resubmit through EDI by April 5.", category:"Patient", pinned:false }
   ];
 
+  const demoProviders = [
+    { name:"Dr. Sarah Chen", role:"Faculty", discipline:"Prosthodontics", phone:"212-555-0101", email:"s.chen@nyu.edu", notes:"My primary attending for prostho cases. Thorough reviewer — always has case notes ready before appointment." },
+    { name:"Dr. Marcus Webb", role:"Faculty", discipline:"Periodontics", phone:"212-555-0102", email:"m.webb@nyu.edu", notes:"Perio attending. Very helpful with pre-auth documentation for SRP. Prefers to review cases on Tuesdays." },
+    { name:"Jordan Kim", role:"D4 Student", discipline:"General Dentistry", phone:"646-555-0201", email:"jk4521@nyu.edu", notes:"My D4 partner for ortho rotation cases. Super reliable — good to check with before submitting lab cases." },
+    { name:"Priya Patel", role:"D3 Student", discipline:"Endodontics", phone:"646-555-0301", email:"pp3847@nyu.edu", notes:"My paired D3 for endo cases. Working on P-2026-003 implant case together. Great at patient communication." },
+  ];
+
   try {
     // Clear existing data for this user
     await pool.query('DELETE FROM patients WHERE user_id=$1', [uid]);
     await pool.query('DELETE FROM rotations WHERE user_id=$1', [uid]);
     await pool.query('DELETE FROM student_notes WHERE user_id=$1', [uid]);
+    await pool.query('DELETE FROM providers WHERE user_id=$1', [uid]);
 
     const year = new Date().getFullYear();
     const insertedPatients = [];
@@ -661,12 +669,57 @@ app.post('/api/demo/seed', requireAuth, async (req, res) => {
       insertedNotes.push({ id, title: n.title, body: n.body, category: n.category||'General', pinned: n.pinned||false, updatedAt: now });
     }
 
-    console.log(`Demo seed: ${insertedPatients.length} patients, ${insertedRotations.length} rotations, ${insertedNotes.length} notes for user ${uid}`);
-    res.json({ patients: insertedPatients, rotations: insertedRotations, notes: insertedNotes });
+    // Insert demo providers
+    const insertedProviders = [];
+    for (const prov of demoProviders) {
+      const id = `PRV-${uid36()}`;
+      await pool.query('INSERT INTO providers (id,user_id,name,role,discipline,phone,email,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        [id, uid, prov.name, prov.role, prov.discipline, prov.phone, prov.email, prov.notes]);
+      insertedProviders.push({ id, name:prov.name, role:prov.role, discipline:prov.discipline, phone:prov.phone, email:prov.email, notes:prov.notes });
+    }
+
+    console.log(`Demo seed: ${insertedPatients.length} patients, ${insertedRotations.length} rotations, ${insertedNotes.length} notes, ${insertedProviders.length} providers for user ${uid}`);
+    res.json({ patients: insertedPatients, rotations: insertedRotations, notes: insertedNotes, providers: insertedProviders });
   } catch (err) {
     console.error('Demo seed error:', err.message);
     res.status(500).json({ error: 'Failed to seed demo data' });
   }
+});
+
+// ── Providers ─────────────────────────────────────────────────────────────────
+
+app.get('/api/providers', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM providers WHERE user_id=$1 ORDER BY created_at ASC', [req.session.userId]);
+    res.json(rows.map(r => ({ id:r.id, name:r.name, role:r.role, discipline:r.discipline, phone:r.phone, email:r.email, notes:r.notes })));
+  } catch (err) { res.status(500).json({ error: 'Failed to load providers' }); }
+});
+
+app.post('/api/providers', requireAuth, async (req, res) => {
+  const { name, role, discipline, phone, email, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+  const id = `PRV-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2,5).toUpperCase()}`;
+  try {
+    await pool.query('INSERT INTO providers (id,user_id,name,role,discipline,phone,email,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [id, req.session.userId, name, role||'Faculty', discipline||'General Dentistry', phone||'', email||'', notes||'']);
+    res.json({ id, name, role:role||'Faculty', discipline:discipline||'General Dentistry', phone:phone||'', email:email||'', notes:notes||'' });
+  } catch (err) { res.status(500).json({ error: 'Failed to create provider' }); }
+});
+
+app.put('/api/providers/:id', requireAuth, async (req, res) => {
+  const { name, role, discipline, phone, email, notes } = req.body;
+  try {
+    await pool.query('UPDATE providers SET name=$1,role=$2,discipline=$3,phone=$4,email=$5,notes=$6 WHERE id=$7 AND user_id=$8',
+      [name, role, discipline, phone||'', email||'', notes||'', req.params.id, req.session.userId]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to update provider' }); }
+});
+
+app.delete('/api/providers/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM providers WHERE id=$1 AND user_id=$2', [req.params.id, req.session.userId]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete provider' }); }
 });
 
 // ── Changelog ─────────────────────────────────────────────────────────────────
@@ -781,7 +834,22 @@ app.get('/{*path}', (req, res) => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-initDb().then(() => {
+initDb().then(async () => {
+  // Ensure demo user exists
+  try {
+    const demoCheck = await pool.query("SELECT id FROM users WHERE email='demo@cliniq.app'");
+    if (demoCheck.rows.length === 0) {
+      const hash = await bcrypt.hash('demo', 10);
+      const ins = await pool.query(
+        "INSERT INTO users (name,email,password_hash,year) VALUES ($1,$2,$3,$4) RETURNING id",
+        ['Demo Student', 'demo@cliniq.app', hash, 'D4']
+      );
+      await pool.query('INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [ins.rows[0].id]);
+      console.log('Demo user created');
+    }
+  } catch (err) {
+    console.error('Demo user init error:', err.message);
+  }
   app.listen(3001, '0.0.0.0', () => {
     console.log('ClinIQ API server running on port 3001');
   });

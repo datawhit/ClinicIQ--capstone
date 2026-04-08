@@ -1,0 +1,71 @@
+In App.jsx and server.js, make the following updates. Do not change any existing logic, API calls, or data structures unless explicitly instructed. Work through each section in order.
+
+1. BOTTOM NAVIGATION — REPLACE ALL TABS
+Remove the current tab navigation entirely. Replace with a fixed bottom navigation bar with these four tabs in this order: Overview, Directory, Goals, Calendar. The existing Today tab content becomes the Overview tab. The existing Requirements tab content becomes the Goals tab. The existing Calendar tab stays as Calendar. Directory is a new tab described in section 4 below. Remove the Notebook tab from the bottom nav entirely — Notebook remains accessible from the hamburger menu only. The AI chat floating button stays exactly as it is. The bottom nav bar is 56px tall, white background, 1px top border rgba(107,33,168,0.08). Active tab label and icon use #534AB7 purple. Inactive tabs use NYU.gray400. Each tab has a small emoji icon above the label: Overview 📋, Directory 👥, Goals 🎓, Calendar 📅.
+
+2. HAMBURGER MENU — CLEAN UP
+Replace the entire hamburger menu content with exactly these items in this order, with a divider between groups:
+Group 1: Paired Provider View (🤝), Urgent Patients (⚠️)
+Divider
+Group 2: Add Patient (➕), Import Roster (📂), Export Roster (📥)
+Divider
+Group 3: Notebook (📓), Settings (⚙️)
+Divider
+Group 4: Sign Out (🚪) in red
+Remove Patient Roster, Graduation Goals, and Calendar from the menu — these are now bottom nav tabs. Remove Load Demo Data from Settings modal entirely — demo data is now handled by the demo login described in section 6.
+
+3. REMOVE QUICK LOG FLOATING BUTTON
+Remove the Quick Log floating teal button (✦) from the bottom left of the screen entirely. The floating AI chat button on the bottom right stays. Make sure no references to quickLogOpen, quickLogPatientId, quickLogNlp, quickLogLoading, or quickLogToast remain in the rendered UI. Keep the state variables to avoid breaking anything but stop rendering the button and its panel.
+
+4. DIRECTORY TAB — NEW FEATURE
+Create a new Directory tab. This is a contact list where students can store information about other providers they work with — attendings, D3/D4 partners, specialists, residents.
+Add the following state variables: const [providers, setProviders] = useState([]), const [providerSearch, setProviderSearch] = useState(""), const [showAddProviderModal, setShowAddProviderModal] = useState(false), const [newProvider, setNewProvider] = useState({ name:"", role:"Faculty", discipline:"General Dentistry", phone:"", email:"", notes:"" }), const [editProvider, setEditProvider] = useState(null).
+The provider roles are: Faculty, D3 Student, D4 Student, GPR Resident, Specialist, Staff.
+The Directory tab layout:
+
+Full width search bar at the very top: rounded, gray background #f3f0f7, no hard border, placeholder "Search providers..." Updates providerSearch state on change
+A row below showing total provider count on the left and a purple "+ Add Provider" button on the right
+Provider list filtered by providerSearch matching name, role, discipline, or email
+Each provider row: a colored avatar circle with the provider's initials (use T.purple background for Faculty, teal for Residents, amber for D3/D4), provider name in 15px medium weight, role and discipline in 12px muted text below, email in 12px muted text if present. Chevron › on the right. Tapping the row opens an edit modal pre-filled with that provider's data.
+Empty state: centered icon 👥, "No providers yet" heading, "Add your attendings, partners, and specialists" subtext, and a purple Add Provider button
+
+Add Provider modal: uses existing .modal-box .modal-overlay styles. Fields: Full Name (required), Role (select from roles list), Discipline (select from DISCIPLINES array), Phone (optional), Email (optional), Notes (optional textarea). Save button calls POST /api/providers. Cancel button closes modal.
+Edit Provider modal: same fields pre-filled. Has a Delete Provider button at the bottom in red that calls DELETE /api/providers/:id with a confirm dialog. Save calls PUT /api/providers/:id.
+In server.js add these three endpoints using the same pattern as existing patient endpoints:
+
+GET /api/providers — returns all providers for the logged-in user
+POST /api/providers — creates a new provider record
+PUT /api/providers/:id — updates a provider record
+DELETE /api/providers/:id — deletes a provider record
+
+Store providers in a providers table in the database with columns: id, user_id, name, role, discipline, phone, email, notes, created_at. Create the table if it does not exist using the same IF NOT EXISTS pattern as other tables.
+Load providers in loadUserData alongside patients, notes, rotations, and settings.
+
+5. CLICKABLE STAT CHIPS ON OVERVIEW
+Make the three stat chips on the Overview (Today) screen tappable.
+Add state: const [showPendingSheet, setShowPendingSheet] = useState(false).
+Chip 1 — Today's patients: clicking scrolls smoothly to the Today's Appointments section. If zero patients today show a toast "No appointments scheduled for today."
+Chip 2 — Pending items: clicking sets showPendingSheet to true. This opens a bottom sheet that slides up from the bottom. The sheet has a 4px by 40px gray drag handle centered at top, an X close button top right, title "Pending Items" in 18px Fraunces serif. Three grouped sections inside a scrollable area max-height 70vh: Section "Pre-Auth Waiting" lists all patients where preAuth is Submitted with days since submission shown in amber. Section "Lab Outstanding" lists all patients where labStatus is Sent with days since sent shown in amber. Section "No Follow-up Scheduled" lists all patients with no nextAppt and not treatmentComplete. Each row shows patient alias, discipline, and the specific issue. Tapping any row closes the sheet and opens that patient's detail screen. If a section has no items do not show that section header. If all sections are empty show a green "All clear — nothing pending" message. Style the bottom sheet: position fixed, bottom 0, left 0, right 0, background white, border-radius 20px 20px 0 0, box-shadow 0 -4px 32px rgba(107,33,168,0.12), z-index 2500, animation slideUp 0.25s ease. Add a dim overlay behind it.
+Chip 3 — Req. left: clicking switches the active tab to Goals and sets showAllGoals to false so the student sees Needs Cases first.
+
+6. DEMO MODE LOGIN
+On the login screen, add a "Demo Mode" button below the Sign In button. Style it as a secondary outlined button: white background, #534AB7 border, #534AB7 text, full width, reads "🎓 Try Demo Mode — no account needed".
+When clicked, log in automatically using username "demo" and password "demo" by calling the existing handleLogin flow with those credentials pre-filled. In server.js, ensure a demo user account exists — on server startup check if a user with email "demo@cliniq.app" exists and if not create it with name "Demo Student", year "D4", and password "demo". When the demo user logs in, check if they have any patients. If they have zero patients, automatically seed the demo caseload by calling the existing demo seed logic. This replaces the Load Demo Data button in Settings which should be removed.
+The demo user's caseload should include the existing 8 realistic demo patients with full visit history, lab status, pre-auth data, and paired providers. It should also pre-populate 4 providers in the Directory: Dr. Sarah Chen (Faculty, Prosthodontics), Dr. Marcus Webb (Faculty, Periodontics), Jordan Kim (D4 Student, General Dentistry), Priya Patel (D3 Student, Endodontics).
+
+7. GUIDED DEMO TOUR
+Add a guided tooltip tour that launches automatically when the demo user logs in for the first time, and can also be triggered manually from a "Take a Tour" button in Settings under the Profile tab.
+Add state: const [tourStep, setTourStep] = useState(null) — null means tour is inactive, a number 1 through 8 means that step is active.
+The tour has 8 steps. Each step shows a tooltip card anchored to a specific part of the UI. The tooltip card has: a step indicator "Step N of 8" in muted text, a bold title, two to three sentences of context written in first person as if a D4 student is explaining it to a new D3, a Next button in purple, a Skip Tour link in muted text, and a back chevron if step > 1.
+Tour steps and anchor points:
+Step 1 — anchor: Overview tab, center screen. Title: "Welcome to ClinIQ." Text: "I'm a D4 at NYU Dentistry and this is how I manage my entire caseload. ClinIQ keeps track of every patient, every requirement, and every pending item so nothing falls through the cracks. Let me show you how it works."
+Step 2 — anchor: the three stat chips. Title: "Your day at a glance." Text: "These three chips tell me everything I need to know when I walk into clinic. How many patients I have today, what's pending, and how close I am to graduation requirements. Tap any chip to dig deeper."
+Step 3 — anchor: Today's appointments card. Title: "Today's patients." Text: "Every patient scheduled for today shows up here with their procedure and appointment time. I tap Log Visit the second I finish with a patient — it takes about 30 seconds and keeps my records current."
+Step 4 — anchor: the floating AI button. Title: "Your AI assistant." Text: "This is the most powerful part of ClinIQ. I ask it things like 'am I on track to graduate' or 'which patients need follow-up' and it gives me a real answer based on my actual caseload. It knows my patients, my requirements, everything."
+Step 5 — anchor: Roster tab. Title: "Your patient roster." Text: "Every patient I'm managing is here. I can search by alias, filter by status, and tap any patient to see their full record — visit history, lab status, pre-auth, all of it. The color badges tell me at a glance who needs attention."
+Step 6 — anchor: Goals tab. Title: "Graduation requirements." Text: "This is what keeps me honest. NYU requires a specific number of cases in each discipline and this screen shows me exactly where I stand. The amber section is where I need to focus — those are requirements I'm behind on."
+Step 7 — anchor: Directory tab. Title: "Provider directory." Text: "I store all my attendings, D3 partners, and specialist contacts here. When I need to coordinate a referral or send a quick note to my paired D3, I find them here in seconds instead of scrolling through my phone contacts."
+Step 8 — anchor: center screen, no specific anchor. Title: "You're ready." Text: "That's ClinIQ. Everything you need to manage your caseload, track your requirements, and graduate on time — in one place. Tap any tab to explore on your own." Button changes from "Next" to "Start using ClinIQ" which closes the tour and sets a localStorage key "cliniq-tour-complete" to prevent auto-replay.
+Tooltip card style: white background, border-radius 16px, padding 20px, box-shadow 0 8px 32px rgba(107,33,168,0.18), max-width 320px, position fixed, z-index 3500. A semi-transparent dark overlay covers the rest of the screen rgba(0,0,0,0.5) with the anchored element highlighted through it using a cutout effect — approximate this by making the overlay z-index 3400 and the highlighted element z-index 3450. A small purple triangle pointer on the tooltip points toward the anchored element. On mobile the tooltip is always centered horizontally and positioned either above or below the anchor depending on available space.
+When the tour is active, tapping outside the tooltip does nothing — the student must use Next or Skip to navigate.
+

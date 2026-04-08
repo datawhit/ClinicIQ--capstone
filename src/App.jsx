@@ -38,13 +38,16 @@ const THEMES = {
 };
 
 const TAB_DEFS = {
-  today:        { label:"📋  Today" },
-  roster:       { label:"👤  Patient Roster" },
-  requirements: { label:"🎓  Graduation Goals" },
+  overview:     { label:"📋  Overview" },
+  directory:    { label:"👥  Directory" },
+  goals:        { label:"🎓  Goals" },
   calendar:     { label:"📅  Calendar" },
   notebook:     { label:"📓  Notebook" },
+  roster:       { label:"👤  Patient Roster" },
 };
-const DEFAULT_TAB_ORDER = ["today","roster","requirements","calendar","notebook"];
+const DEFAULT_TAB_ORDER = ["overview","directory","goals","calendar","notebook"];
+
+const PROVIDER_ROLES = ["Faculty","D3 Student","D4 Student","GPR Resident","Specialist","Staff"];
 const STAT_DEFS = [
   { id:"total",    label:"Total Patients" },
   { id:"active",   label:"Active" },
@@ -742,7 +745,7 @@ export default function App() {
   const [detailPatient, setDetailPatient] = useState(null);
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [filter, setFilter] = useState("All");
-  const [tab, setTab] = useState("today");
+  const [tab, setTab] = useState("overview");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [demoSeeding, setDemoSeeding] = useState(false);
@@ -830,6 +833,13 @@ export default function App() {
   const [importPreview, setImportPreview] = useState([]);
   const [importResult, setImportResult] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
+  const [providers, setProviders] = useState([]);
+  const [providerSearch, setProviderSearch] = useState("");
+  const [showAddProviderModal, setShowAddProviderModal] = useState(false);
+  const [newProvider, setNewProvider] = useState({ name:"", role:"Faculty", discipline:"General Dentistry", phone:"", email:"", notes:"" });
+  const [editProvider, setEditProvider] = useState(null);
+  const [showPendingSheet, setShowPendingSheet] = useState(false);
+  const [tourStep, setTourStep] = useState(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 640);
@@ -852,14 +862,15 @@ export default function App() {
 
   const loadUserData = useCallback(async () => {
     try {
-      const [pRes, nRes, rRes, sRes] = await Promise.all([
+      const [pRes, nRes, rRes, sRes, prRes] = await Promise.all([
         fetch("/api/patients"), fetch("/api/notes"),
-        fetch("/api/rotations"), fetch("/api/settings"),
+        fetch("/api/rotations"), fetch("/api/settings"), fetch("/api/providers"),
       ]);
       let pData = [];
       if (pRes.ok) { pData = await pRes.json(); setPatients(pData); }
       if (nRes.ok) setNotes(await nRes.json());
       if (rRes.ok) setRotations(await rRes.json());
+      if (prRes.ok) setProviders(await prRes.json());
       if (sRes.ok) {
         const s = await sRes.json();
         if (s.graduationDate) setGraduationDateStr(s.graduationDate);
@@ -1215,8 +1226,36 @@ RESPONSE RULES:
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method:"POST" });
     setUser(null);
-    setPatients([]); setNotes([]); setRotations([]);
+    setPatients([]); setNotes([]); setRotations([]); setProviders([]);
     setLoginForm({ email:"", password:"", name:"", year:"D3" });
+  };
+
+  const handleDemoLogin = async () => {
+    setLoginLoading(true); setLoginError("");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ email:"demo@cliniq.app", password:"demo", name:"Demo Student", year:"D4" })
+      });
+      const data = await res.json();
+      if (!res.ok) { setLoginError(data.error||"Demo login failed"); setLoginLoading(false); return; }
+      setUser(data.user);
+      const pData = await loadUserData();
+      if (Array.isArray(pData) && pData.length === 0) {
+        const seedRes = await fetch("/api/demo/seed", { method:"POST" });
+        if (seedRes.ok) {
+          const seedData = await seedRes.json();
+          setPatients(seedData.patients||[]);
+          setRotations(seedData.rotations||[]);
+          setNotes(seedData.notes||[]);
+          if (seedData.providers) setProviders(seedData.providers);
+        }
+      }
+      if (!localStorage.getItem("cliniq-tour-complete")) {
+        setTourStep(1);
+      }
+    } catch { setLoginError("Connection error. Please try again."); }
+    setLoginLoading(false);
   };
 
   const exportRoster = () => {
@@ -1414,6 +1453,7 @@ RESPONSE RULES:
                     </div>
                     {loginError && <div style={{ background:NYU.redLight, borderRadius:10, padding:"10px 14px", fontSize:13, color:NYU.red }}>{loginError}</div>}
                     <button className="action-btn" onClick={handleLogin} disabled={loginLoading} style={{ background:T.purple, color:"white", width:"100%", marginTop:4, padding:"13px 20px", fontSize:15, opacity:loginLoading?0.7:1 }}>{loginLoading?<><span className="spinner"/>Signing in…</>:"Sign In"}</button>
+                    <button onClick={handleDemoLogin} disabled={loginLoading} style={{ background:"white", color:"#534AB7", border:"2px solid #534AB7", borderRadius:12, width:"100%", padding:"13px 20px", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"'Inter',sans-serif", opacity:loginLoading?0.7:1 }}>🎓 Try Demo Mode — no account needed</button>
                   </div>
                   <p style={{ fontSize:11, color:NYU.gray400, textAlign:"center", marginTop:20, lineHeight:1.5 }}>
                     Production version will authenticate via NYU SSO.<br/>Patient data uses HIPAA-safe identifiers — no PHI stored or transmitted.
@@ -1491,11 +1531,15 @@ RESPONSE RULES:
                       </button>
                     ))}
                     <div style={{ height:1, background:NYU.gray100, margin:"4px 12px" }}/>
-                    <button onClick={()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setSettingsTab("profile"); setShowSettings(true); setMenuOpen(false); }}
-                      style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.gray900, fontFamily:"'Inter', sans-serif", textAlign:"left" }}
-                      onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                      <span style={{ fontSize:15 }}>⚙️</span>Settings
-                    </button>
+                    {[
+                      { label:"Notebook", icon:"📓", action:()=>{ setTab("notebook"); setMenuOpen(false); } },
+                      { label:"Settings", icon:"⚙️", action:()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setSettingsTab("profile"); setShowSettings(true); setMenuOpen(false); } },
+                    ].map((item,i)=>(
+                      <button key={i} onClick={item.action} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.gray900, fontFamily:"'Inter', sans-serif", textAlign:"left" }}
+                        onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                        <span style={{ fontSize:15 }}>{item.icon}</span>{item.label}
+                      </button>
+                    ))}
                     <div style={{ height:1, background:NYU.gray100, margin:"4px 12px" }}/>
                     <button onClick={()=>{ handleLogout(); setMenuOpen(false); }} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.red, fontFamily:"'Inter', sans-serif", textAlign:"left" }}
                       onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
@@ -1516,8 +1560,8 @@ RESPONSE RULES:
 
         <div className="page-inner" style={{ maxWidth:640, margin:"0 auto" }}>
 
-          {/* ── TODAY TAB ── */}
-          {tab==="today"&&(()=>{
+          {/* ── OVERVIEW TAB ── */}
+          {tab==="overview"&&(()=>{
             const todayStr = new Date().toISOString().split("T")[0];
             const hour = new Date().getHours();
             const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -1539,11 +1583,12 @@ RESPONSE RULES:
                 <div style={{ fontSize:13, color:"#a89cbd", marginBottom:20 }}>{new Date().toLocaleDateString("en-US",{ weekday:"long", month:"long", day:"numeric" })} · {patients.length} patient{patients.length!==1?"s":""}</div>
                 <div style={{ display:"flex", gap:10, marginBottom:20 }}>
                   {[
-                    {label:"Today's patients",value:todayPts.length,bg:"#EEEDFE",color:"#3C3489"},
-                    {label:"Pending items",value:pendingCount,bg:"#FAEEDA",color:"#633806"},
-                    {label:"Req. left",value:reqLeft,bg:"#E1F5EE",color:"#085041"},
+                    {label:"Today's patients",value:todayPts.length,bg:"#EEEDFE",color:"#3C3489",onClick:()=>{ if(todayPts.length===0){ showError("No appointments scheduled for today."); } else { document.getElementById("today-appts-section")?.scrollIntoView({ behavior:"smooth" }); } }},
+                    {label:"Pending items",value:pendingCount,bg:"#FAEEDA",color:"#633806",onClick:()=>setShowPendingSheet(true)},
+                    {label:"Req. left",value:reqLeft,bg:"#E1F5EE",color:"#085041",onClick:()=>{ setTab("goals"); setShowAllGoals(false); }},
                   ].map(s=>(
-                    <div key={s.label} style={{ flex:1,background:s.bg,borderRadius:16,padding:"14px 10px",textAlign:"center",minWidth:0 }}>
+                    <div key={s.label} onClick={s.onClick} style={{ flex:1,background:s.bg,borderRadius:16,padding:"14px 10px",textAlign:"center",minWidth:0,cursor:"pointer",transition:"transform 0.1s" }}
+                      onMouseEnter={e=>e.currentTarget.style.transform="scale(1.03)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
                       <div style={{ fontSize:26,fontWeight:700,color:s.color,fontFamily:"'Fraunces', serif",lineHeight:1 }}>{s.value}</div>
                       <div style={{ fontSize:11,color:s.color,marginTop:5,opacity:0.85,lineHeight:1.3 }}>{s.label}</div>
                     </div>
@@ -1566,7 +1611,7 @@ RESPONSE RULES:
                     <button onClick={()=>{ setWeeklyToastDismissed(true); localStorage.setItem("lastWeeklySummaryDate",thisWeekKey); }} style={{ background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,color:"white",fontSize:18,cursor:"pointer",padding:"0 8px",flexShrink:0,lineHeight:1 }}>×</button>
                   </div>
                 )}
-                <div style={{ fontSize:11,fontWeight:700,color:"#a89cbd",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12 }}>Today's appointments</div>
+                <div id="today-appts-section" style={{ fontSize:11,fontWeight:700,color:"#a89cbd",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12 }}>Today's appointments</div>
                 {todayPts.length===0?(
                   <div style={{ background:"white",borderRadius:16,padding:"32px 20px",textAlign:"center",border:"1px solid rgba(107,33,168,0.08)",color:"#a89cbd",marginBottom:24 }}>
                     <div style={{ fontSize:28,marginBottom:10 }}>📅</div>
@@ -2059,7 +2104,7 @@ RESPONSE RULES:
           )}
 
           {/* ── REQUIREMENTS TAB ── */}
-          {tab==="requirements"&&(()=>{
+          {tab==="goals"&&(()=>{
             const getCompleted=(goal)=>patients.filter(p=>p.discipline===goal.discipline&&p.isPrimaryProvider!==false).reduce((s,p)=>s+(p.visitLog?.length||0),0);
             const visibleGoals=customGoals.filter(g=>g.visible);
             const complete=visibleGoals.filter(g=>getCompleted(g)>=g.required);
@@ -2156,7 +2201,7 @@ RESPONSE RULES:
                   </div>
                 )}
                 {/* Edit goals button */}
-                <button onClick={()=>{ setEditGoalsDraft([...customGoals.map(g=>({...g}))]); setEditingGoals(true); setTab("requirements"); }}
+                <button onClick={()=>{ setEditGoalsDraft([...customGoals.map(g=>({...g}))]); setEditingGoals(true); setTab("goals"); }}
                   style={{ width:"100%",background:"white",border:"1px solid rgba(107,33,168,0.15)",borderRadius:14,padding:"12px",cursor:"pointer",fontSize:13,fontWeight:600,color:T.purple,fontFamily:"'Inter',sans-serif",marginTop:4 }}>✎ Edit Goals & Targets</button>
                 {editingGoals&&editGoalsDraft&&(
                   <div style={{ marginTop:16 }}>
@@ -2185,6 +2230,65 @@ RESPONSE RULES:
               </div>
             );
           })()}
+          {/* ── DIRECTORY TAB ── */}
+          {tab==="directory"&&(()=>{
+            const ROLE_COLORS = {
+              "Faculty":{ bg:"#ede9fe", color:T.purple },
+              "D3 Student":{ bg:"#fef3c7", color:"#b45309" },
+              "D4 Student":{ bg:"#fde8d8", color:"#c2410c" },
+              "GPR Resident":{ bg:"#ccfbf1", color:"#0d9488" },
+              "Specialist":{ bg:"#e0f2fe", color:"#0369a1" },
+              "Staff":{ bg:NYU.gray100, color:NYU.gray600 },
+            };
+            const getInitials=(name)=>name.split(" ").filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
+            const filtered=providers.filter(p=>{
+              const q=providerSearch.toLowerCase();
+              return !q||(p.name||"").toLowerCase().includes(q)||(p.role||"").toLowerCase().includes(q)||(p.discipline||"").toLowerCase().includes(q)||(p.email||"").toLowerCase().includes(q);
+            });
+            return (
+              <div style={{ padding:"16px 16px 0" }}>
+                <input
+                  style={{ width:"100%",boxSizing:"border-box",border:"none",borderRadius:14,padding:"12px 16px",fontSize:14,fontFamily:"'Inter',sans-serif",color:"#1e1428",outline:"none",background:"#f3f0f7",marginBottom:12 }}
+                  placeholder="Search providers..."
+                  value={providerSearch}
+                  onChange={e=>setProviderSearch(e.target.value)}
+                />
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+                  <div style={{ fontSize:13,color:NYU.gray400,fontWeight:500 }}>{providers.length} provider{providers.length!==1?"s":""}</div>
+                  <button className="action-btn" onClick={()=>{ setNewProvider({name:"",role:"Faculty",discipline:"General Dentistry",phone:"",email:"",notes:""}); setShowAddProviderModal(true); }} style={{ background:T.purple,color:"white",fontSize:12,padding:"7px 16px" }}>+ Add Provider</button>
+                </div>
+                {filtered.length===0?(
+                  <div style={{ textAlign:"center",padding:"60px 20px" }}>
+                    <div style={{ fontSize:40,marginBottom:14 }}>👥</div>
+                    <div style={{ fontSize:15,fontWeight:700,color:NYU.gray900,marginBottom:8 }}>No providers yet</div>
+                    <div style={{ fontSize:13,color:NYU.gray400,marginBottom:20,lineHeight:1.5 }}>Add your attendings, partners, and specialists</div>
+                    <button className="action-btn" onClick={()=>{ setNewProvider({name:"",role:"Faculty",discipline:"General Dentistry",phone:"",email:"",notes:""}); setShowAddProviderModal(true); }} style={{ background:T.purple,color:"white",fontSize:13 }}>+ Add Provider</button>
+                  </div>
+                ):(
+                  <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                    {filtered.map(prov=>{
+                      const rc=ROLE_COLORS[prov.role]||{bg:NYU.gray100,color:NYU.gray600};
+                      return (
+                        <div key={prov.id} onClick={()=>setEditProvider({...prov})} style={{ background:"white",borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,border:"1px solid rgba(107,33,168,0.08)",boxShadow:"0 1px 4px rgba(107,33,168,0.05)",cursor:"pointer" }}>
+                          <div style={{ width:42,height:42,borderRadius:13,background:rc.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                            <span style={{ fontSize:13,fontWeight:700,color:rc.color }}>{getInitials(prov.name)}</span>
+                          </div>
+                          <div style={{ flex:1,minWidth:0 }}>
+                            <div style={{ fontWeight:600,fontSize:15,color:"#1e1428",marginBottom:2 }}>{prov.name}</div>
+                            <div style={{ fontSize:12,color:NYU.gray400 }}>{prov.role} · {prov.discipline}</div>
+                            {prov.email&&<div style={{ fontSize:12,color:NYU.gray400,marginTop:1 }}>{prov.email}</div>}
+                          </div>
+                          <span style={{ color:"#e5dff0",fontSize:16,flexShrink:0 }}>›</span>
+                        </div>
+                      );
+                    })}
+                    <div style={{ height:16 }}/>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* ── AI TAB ── */}
           {tab==="ai"&&(
             <div style={{ display:"flex",flexDirection:"column",height:"calc(100vh - 56px - 56px)" }}>
@@ -3185,81 +3289,18 @@ RESPONSE RULES:
         );
       })()}
 
-      {/* ── QUICK LOG FLOATING BUTTON ── */}
-      <div className="float-left" style={{ position:"fixed",bottom:84,left:16,zIndex:2000 }}>
-        {quickLogOpen&&(
-          <div className="quick-log-panel" style={{ position:"absolute",bottom:72,left:0,width:340,background:"white",borderRadius:20,boxShadow:"0 8px 40px rgba(0,0,0,0.18)",overflow:"hidden",animation:"slideUp 0.2s ease" }}>
-            <div style={{ background:"#0d9488",padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-              <div style={{ color:"white",fontWeight:700,fontSize:14 }}>✦ Quick Log Visit</div>
-              <button onClick={()=>setQuickLogOpen(false)} style={{ background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,width:26,height:26,cursor:"pointer",color:"white",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center" }}>×</button>
-            </div>
-            <div style={{ padding:"16px" }}>
-              <div style={{ marginBottom:12 }}>
-                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Patient</label>
-                <select value={quickLogPatientId} onChange={e=>setQuickLogPatientId(e.target.value)} style={{ width:"100%",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"9px 12px",fontSize:13,fontFamily:"'Inter', sans-serif",color:NYU.gray900,background:"white",outline:"none" }}>
-                  <option value="">Select patient…</option>
-                  {(()=>{
-                    const todayStr=new Date().toISOString().split("T")[0];
-                    const todayPts=patients.filter(p=>p.nextAppt===todayStr);
-                    const otherPts=patients.filter(p=>p.nextAppt!==todayStr&&!p.treatmentComplete);
-                    return [
-                      todayPts.length>0&&<optgroup key="today" label="📅 Today's patients">{todayPts.map(p=><option key={p.id} value={p.id}>{p.alias}</option>)}</optgroup>,
-                      otherPts.length>0&&<optgroup key="other" label="All active patients">{otherPts.map(p=><option key={p.id} value={p.id}>{p.alias}</option>)}</optgroup>
-                    ];
-                  })()}
-                </select>
-              </div>
-              <div style={{ marginBottom:12 }}>
-                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Visit note</label>
-                <textarea rows={3} value={quickLogNlp} onChange={e=>setQuickLogNlp(e.target.value)} placeholder='e.g. "Saw patient today, did a crown prep, follow up in 3 weeks"' style={{ width:"100%",boxSizing:"border-box",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"9px 12px",fontSize:13,fontFamily:"'Inter', sans-serif",color:NYU.gray900,resize:"none",outline:"none" }}/>
-              </div>
-              <button className="action-btn" disabled={!quickLogPatientId||!quickLogNlp.trim()||quickLogLoading}
-                onClick={async()=>{
-                  setQuickLogLoading(true);
-                  try {
-                    const todayStr=new Date().toISOString().split("T")[0];
-                    let parsed=null;
-                    try {
-                      const r=await fetch("/api/parse",{ method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ model:"claude-sonnet-4-20250514",max_tokens:500,messages:[{ role:"user",content:`Extract visit info as JSON only: {"date":"YYYY-MM-DD","procedure":"name","notes":"context"}\nNote: "${quickLogNlp}"` }] }) });
-                      const d=await r.json();
-                      parsed=JSON.parse(d.content[0].text.trim());
-                    } catch(_){}
-                    const visit={ date:parsed?.date||todayStr,procedure:parsed?.procedure||quickLogNlp.slice(0,60),notes:parsed?.notes||quickLogNlp,nextAppt:"",cdtCode:"" };
-                    const res=await fetch(`/api/patients/${quickLogPatientId}/visits`,{ method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(visit) });
-                    if(res.ok){
-                      const vData=await res.json();
-                      const pt=patients.find(p=>p.id===quickLogPatientId);
-                      setPatients(prev=>prev.map(p=>p.id===quickLogPatientId?{ ...p,lastVisit:visit.date,procedure:visit.procedure,visitLog:[...(p.visitLog||[]),vData] }:p));
-                      logChange({ action_type:"VISIT_LOGGED",patient_alias:pt?.alias||quickLogPatientId,description:`Quick logged visit for ${pt?.alias||quickLogPatientId}: ${visit.procedure}` });
-                      const alias=pt?.alias||"patient";
-                      setQuickLogToast(`Visit logged for ${alias} ✓`);
-                      setTimeout(()=>setQuickLogToast(""),2500);
-                      setQuickLogOpen(false);
-                      setQuickLogNlp("");
-                      setQuickLogPatientId("");
-                    }
-                  } catch(e){ console.error(e); }
-                  setQuickLogLoading(false);
-                }}
-                style={{ width:"100%",background:"#0d9488",color:"white",fontSize:13,opacity:(!quickLogPatientId||!quickLogNlp.trim()||quickLogLoading)?0.6:1 }}>
-                {quickLogLoading?"Logging…":"Submit Visit"}
-              </button>
-            </div>
-          </div>
-        )}
-        {quickLogToast&&(
-          <div style={{ position:"absolute",bottom:72,left:0,background:"#0d9488",color:"white",borderRadius:12,padding:"10px 16px",fontSize:13,fontWeight:600,whiteSpace:"nowrap",boxShadow:"0 4px 16px rgba(0,0,0,0.15)",animation:"slideUp 0.2s ease" }}>{quickLogToast}</div>
-        )}
-        <button onClick={()=>setQuickLogOpen(v=>!v)} style={{ width:56,height:56,borderRadius:"50%",background:"#0d9488",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(13,148,136,0.45)",fontSize:22,color:"white" }}>✦</button>
-      </div>
+      {/* ── FLOATING AI BUTTON ── */}
+      <button className="float-right" onClick={()=>setTab("ai")} style={{ position:"fixed",bottom:72,right:16,zIndex:2000,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},${T.purpleDark})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${T.purple}55`,fontSize:22 }} title="Ask AI">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="9" stroke="white" strokeWidth="1.6"/><path d="M7.5 11h.02M11 11h.02M14.5 11h.02" stroke="white" strokeWidth="2.2" strokeLinecap="round"/></svg>
+      </button>
 
       {/* ── BOTTOM NAV ── */}
       <div style={{ position:"fixed",bottom:0,left:0,right:0,height:56,background:"white",borderTop:"1px solid #f3f0f7",display:"flex",alignItems:"center",zIndex:1000,boxShadow:"0 -2px 12px rgba(83,74,183,0.07)" }}>
         {[
-          {key:"today",  icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="5" width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="9.25" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="13.5" width="7" height="1.5" rx="0.75" fill="currentColor"/></svg>, label:"Today"},
-          {key:"roster", icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.5"/><path d="M3.5 17c0-3.59 2.91-6.5 6.5-6.5s6.5 2.91 6.5 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>, label:"Roster"},
-          {key:"requirements", icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3l1.8 3.6L16 7.3l-3 2.9.7 4.1L10 12.1 6.3 14.3l.7-4.1-3-2.9 4.2-.7L10 3z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>, label:"Goals"},
-          {key:"ai",     icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.4"/><path d="M7 10h.01M10 10h.01M13 10h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>, label:"AI"},
+          {key:"overview",   icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="5" width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="9.25" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="13.5" width="7" height="1.5" rx="0.75" fill="currentColor"/></svg>, label:"Overview"},
+          {key:"directory",  icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="7.5" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.4"/><path d="M2 17c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M13 6.5c1.5 0 2.5 1 2.5 2.5S14.5 11.5 13 11.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M16.5 17c0-2-1-3.5-2.5-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>, label:"Directory"},
+          {key:"goals",      icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3l1.8 3.6L16 7.3l-3 2.9.7 4.1L10 12.1 6.3 14.3l.7-4.1-3-2.9 4.2-.7L10 3z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>, label:"Goals"},
+          {key:"calendar",   icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M3 8h14" stroke="currentColor" strokeWidth="1.4"/><path d="M7 2v3M13 2v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>, label:"Calendar"},
         ].map(t=>{
           const active=tab===t.key;
           return (
@@ -3270,6 +3311,143 @@ RESPONSE RULES:
           );
         })}
       </div>
+
+      {/* ── ADD PROVIDER MODAL ── */}
+      {showAddProviderModal&&newProvider&&(
+        <div className="modal-overlay" onClick={()=>setShowAddProviderModal(false)}>
+          <div className="modal-box" onClick={e=>e.stopPropagation()} style={{ maxWidth:400 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
+              <div style={{ fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:20,color:"#1e1428" }}>Add Provider</div>
+              <button onClick={()=>setShowAddProviderModal(false)} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:NYU.gray400,lineHeight:1 }}>×</button>
+            </div>
+            {[
+              { label:"Name", field:"name", type:"text", placeholder:"Dr. Jane Smith" },
+              { label:"Email", field:"email", type:"email", placeholder:"jane@nyu.edu" },
+              { label:"Phone", field:"phone", type:"tel", placeholder:"Optional" },
+            ].map(f=>(
+              <div key={f.field} style={{ marginBottom:14 }}>
+                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>{f.label}</label>
+                <input type={f.type} value={newProvider[f.field]||""} onChange={e=>setNewProvider(p=>({...p,[f.field]:e.target.value}))} placeholder={f.placeholder}
+                  style={{ width:"100%",boxSizing:"border-box",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",outline:"none" }}/>
+              </div>
+            ))}
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14 }}>
+              <div>
+                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Role</label>
+                <select value={newProvider.role||"Faculty"} onChange={e=>setNewProvider(p=>({...p,role:e.target.value}))}
+                  style={{ width:"100%",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",outline:"none",background:"white" }}>
+                  {["Faculty","D3 Student","D4 Student","GPR Resident","Specialist","Staff"].map(r=><option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Discipline</label>
+                <select value={newProvider.discipline||"General Dentistry"} onChange={e=>setNewProvider(p=>({...p,discipline:e.target.value}))}
+                  style={{ width:"100%",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",outline:"none",background:"white" }}>
+                  {["General Dentistry","Periodontics","Endodontics","Oral Surgery","Orthodontics","Pediatric Dentistry","Prosthodontics","Oral Medicine","Other"].map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ marginBottom:18 }}>
+              <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Notes (optional)</label>
+              <textarea rows={2} value={newProvider.notes||""} onChange={e=>setNewProvider(p=>({...p,notes:e.target.value}))}
+                style={{ width:"100%",boxSizing:"border-box",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",resize:"none",outline:"none" }} placeholder="Room number, availability, notes…"/>
+            </div>
+            <button className="action-btn" disabled={!newProvider.name?.trim()} onClick={async()=>{
+              if(!newProvider.name?.trim()) return;
+              const res=await fetch("/api/providers",{ method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newProvider) });
+              if(res.ok){ const p=await res.json(); setProviders(prev=>[p,...prev]); setShowAddProviderModal(false); setNewProvider(null); }
+              else showError("Could not save provider.");
+            }} style={{ width:"100%",background:T.purple,color:"white",fontSize:14,opacity:!newProvider.name?.trim()?0.5:1 }}>Save Provider</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT PROVIDER MODAL ── */}
+      {editProvider&&(
+        <div className="modal-overlay" onClick={()=>setEditProvider(null)}>
+          <div className="modal-box" onClick={e=>e.stopPropagation()} style={{ maxWidth:400 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
+              <div style={{ fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:20,color:"#1e1428" }}>Edit Provider</div>
+              <button onClick={()=>setEditProvider(null)} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:NYU.gray400,lineHeight:1 }}>×</button>
+            </div>
+            {[
+              { label:"Name", field:"name", type:"text", placeholder:"Dr. Jane Smith" },
+              { label:"Email", field:"email", type:"email", placeholder:"jane@nyu.edu" },
+              { label:"Phone", field:"phone", type:"tel", placeholder:"Optional" },
+            ].map(f=>(
+              <div key={f.field} style={{ marginBottom:14 }}>
+                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>{f.label}</label>
+                <input type={f.type} value={editProvider[f.field]||""} onChange={e=>setEditProvider(p=>({...p,[f.field]:e.target.value}))} placeholder={f.placeholder}
+                  style={{ width:"100%",boxSizing:"border-box",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",outline:"none" }}/>
+              </div>
+            ))}
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14 }}>
+              <div>
+                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Role</label>
+                <select value={editProvider.role||"Faculty"} onChange={e=>setEditProvider(p=>({...p,role:e.target.value}))}
+                  style={{ width:"100%",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",outline:"none",background:"white" }}>
+                  {["Faculty","D3 Student","D4 Student","GPR Resident","Specialist","Staff"].map(r=><option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Discipline</label>
+                <select value={editProvider.discipline||"General Dentistry"} onChange={e=>setEditProvider(p=>({...p,discipline:e.target.value}))}
+                  style={{ width:"100%",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",outline:"none",background:"white" }}>
+                  {["General Dentistry","Periodontics","Endodontics","Oral Surgery","Orthodontics","Pediatric Dentistry","Prosthodontics","Oral Medicine","Other"].map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ marginBottom:18 }}>
+              <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Notes (optional)</label>
+              <textarea rows={2} value={editProvider.notes||""} onChange={e=>setEditProvider(p=>({...p,notes:e.target.value}))}
+                style={{ width:"100%",boxSizing:"border-box",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",resize:"none",outline:"none" }} placeholder="Room number, availability, notes…"/>
+            </div>
+            <div style={{ display:"flex",gap:10 }}>
+              <button className="action-btn" onClick={async()=>{
+                const res=await fetch(`/api/providers/${editProvider.id}`,{ method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(editProvider) });
+                if(res.ok){ const p=await res.json(); setProviders(prev=>prev.map(x=>x.id===p.id?p:x)); setEditProvider(null); }
+                else showError("Could not update provider.");
+              }} style={{ flex:1,background:T.purple,color:"white",fontSize:14 }}>Save Changes</button>
+              <button className="action-btn" onClick={async()=>{
+                if(!confirm("Remove this provider?")) return;
+                const res=await fetch(`/api/providers/${editProvider.id}`,{ method:"DELETE" });
+                if(res.ok){ setProviders(prev=>prev.filter(x=>x.id!==editProvider.id)); setEditProvider(null); }
+                else showError("Could not delete provider.");
+              }} style={{ background:"white",border:`1.5px solid #fecaca`,color:NYU.red,fontSize:14,padding:"10px 16px",borderRadius:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600 }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PENDING ITEMS SHEET ── */}
+      {showPendingSheet&&(
+        <div className="modal-overlay" onClick={()=>setShowPendingSheet(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{ position:"fixed",bottom:0,left:0,right:0,background:"white",borderRadius:"20px 20px 0 0",padding:"20px 20px 40px",maxHeight:"70vh",overflowY:"auto",zIndex:10000 }}>
+            <div style={{ width:36,height:4,background:"#e5dff0",borderRadius:2,margin:"0 auto 20px" }}/>
+            <div style={{ fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:22,color:"#1e1428",marginBottom:16 }}>Pending items</div>
+            {(()=>{
+              const pending=patients.filter(p=>!p.treatmentComplete&&(
+                p.labStatus==="In Lab"||p.preAuthStatus==="Pending"||p.urgency==="HIGH"||p.urgency==="MEDIUM"
+              ));
+              if(!pending.length) return <div style={{ textAlign:"center",padding:"40px 20px",color:NYU.gray400,fontSize:14 }}>No pending items — you're all clear!</div>;
+              return pending.map(p=>(
+                <div key={p.id} onClick={()=>{ setSelectedPatient(p); setShowPendingSheet(false); }} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 0",borderBottom:"1px solid #f3f0f7",cursor:"pointer" }}>
+                  <div style={{ width:36,height:36,borderRadius:11,background:p.urgency==="HIGH"?"#fee2e2":p.urgency==="MEDIUM"?"#fef3c7":"#f3f0f7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                    <span style={{ fontSize:16 }}>{p.urgency==="HIGH"?"⚠️":p.labStatus==="In Lab"?"🧪":"⏳"}</span>
+                  </div>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontWeight:600,fontSize:14,color:"#1e1428" }}>{p.alias}</div>
+                    <div style={{ fontSize:12,color:NYU.gray400 }}>
+                      {[p.urgency==="HIGH"&&"High urgency",p.urgency==="MEDIUM"&&"Needs follow-up",p.labStatus==="In Lab"&&"Lab pending",p.preAuthStatus==="Pending"&&"Pre-auth pending"].filter(Boolean).join(" · ")}
+                    </div>
+                  </div>
+                  <span style={{ color:"#e5dff0",fontSize:16 }}>›</span>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* ── ROTATION EDIT MODAL ── */}
       {showRotationModal&&rotationDraft&&(
@@ -3575,16 +3753,14 @@ RESPONSE RULES:
                     <button className="action-btn" onClick={()=>{ exportRoster(); }} style={{ flex:1,background:"white",color:NYU.gray700,border:`1.5px solid ${NYU.gray200}`,fontSize:13 }}>📥 Export CSV</button>
                   </div>
                 </div>
-                <div style={{ background:"#fef9c3",borderRadius:14,padding:"16px 18px",border:"1px solid #fde047" }}>
-                  <div style={{ fontSize:11,fontWeight:700,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10 }}>Demo Data</div>
-                  <div style={{ fontSize:12,color:"#78350f",marginBottom:12,lineHeight:1.5 }}>
-                    Load 8 sample patients across all disciplines — complete with visit history, lab status, pre-auth data, and paired providers. Also loads 2 rotations and 3 notebook entries.<br/>
-                    <strong style={{ color:"#b45309" }}>⚠ This will replace all your current patients, rotations, and notes.</strong>
+                <div style={{ background:`${T.purple}12`,borderRadius:14,padding:"16px 18px",border:`1px solid ${T.purple}30`,display:"flex",alignItems:"center",gap:14 }}>
+                  <div style={{ fontSize:28,flexShrink:0 }}>🧭</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13,fontWeight:700,color:T.purpleDark,marginBottom:4 }}>Take a Tour</div>
+                    <div style={{ fontSize:12,color:T.purple,lineHeight:1.5,marginBottom:10 }}>Rediscover all the features of ClinIQ with a guided walkthrough.</div>
+                    <button className="action-btn" onClick={()=>{ setShowSettings(false); setTourStep(1); localStorage.removeItem("cliniq-tour-complete"); }}
+                      style={{ background:T.purple,color:"white",fontSize:12,padding:"7px 16px" }}>Start Tour</button>
                   </div>
-                  <button className="action-btn" onClick={loadDemoData} disabled={demoSeeding}
-                    style={{ background:"#92400e",color:"white",fontSize:13,width:"100%" }}>
-                    {demoSeeding ? "Loading demo data…" : "🎓 Load Demo Caseload"}
-                  </button>
                 </div>
                 <div style={{ background:NYU.gray50,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
                   <div><div style={{ fontSize:13,fontWeight:600,color:NYU.gray900 }}>ClinIQ</div><div style={{ fontSize:11,color:NYU.gray400,marginTop:2 }}>NYU College of Dentistry · v1.1</div></div>
@@ -3759,6 +3935,42 @@ RESPONSE RULES:
           </div>
         </div>
       )}
+
+      {/* ── GUIDED TOUR OVERLAY ── */}
+      {tourStep!==null&&(()=>{
+        const steps=[
+          { icon:"🏠", title:"Overview", body:"The Overview tab is your daily command center — greeting, today's appointments, stat chips, nudges, and behavioral insights all in one scroll." },
+          { icon:"👥", title:"Directory", body:"The Directory tab stores your attendings, partners, and specialists. Tap any card to edit their info, or tap + Add Provider to create a new entry." },
+          { icon:"⭐", title:"Goals", body:"Goals shows your graduation requirement progress grouped by status. Green = done, amber = in progress. Tap a discipline to go to patients in that specialty." },
+          { icon:"📅", title:"Calendar", body:"Calendar shows upcoming appointments and external rotations in a monthly view. Tap any day to see or schedule appointments." },
+          { icon:"🔢", title:"Stat chips", body:"The three chips at the top of Overview are tappable — Today's Patients scrolls down to your schedule, Pending opens a priority list, and Req. Left jumps to Goals." },
+          { icon:"💬", title:"AI Assistant", body:"Tap the AI button (bottom-right) to open the AI assistant. Ask anything — it knows your entire caseload, requirements, and NYUCD clinical protocols." },
+          { icon:"📓", title:"Notebook & Roster", body:"Access your clinical notebook and full patient roster from the hamburger menu (top-left). Use the roster search to filter by alias, chart number, or procedure." },
+          { icon:"🎓", title:"You're all set!", body:"ClinIQ is built to grow with your caseload. Add patients, log visits, and let AI help you stay on track for graduation. Good luck!" },
+        ];
+        const step=steps[(tourStep||1)-1];
+        const last=tourStep===steps.length;
+        return (
+          <div style={{ position:"fixed",inset:0,background:"rgba(30,20,40,0.72)",zIndex:20000,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"0 0 72px" }} onClick={()=>{ if(last){ setTourStep(null); localStorage.setItem("cliniq-tour-complete","1"); } }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:"white",borderRadius:20,padding:"28px 24px 24px",maxWidth:420,width:"100%",margin:"0 16px",boxShadow:"0 16px 60px rgba(0,0,0,0.35)" }}>
+              <div style={{ display:"flex",gap:6,marginBottom:18 }}>
+                {steps.map((_,i)=><div key={i} style={{ flex:1,height:3,borderRadius:2,background:i<tourStep?"#534AB7":"#e5dff0",transition:"background 0.3s" }}/>)}
+              </div>
+              <div style={{ fontSize:36,marginBottom:12 }}>{step.icon}</div>
+              <div style={{ fontFamily:"'Fraunces',serif",fontSize:22,fontWeight:700,color:"#1e1428",marginBottom:10 }}>{step.title}</div>
+              <div style={{ fontSize:14,color:"#6b5f7a",lineHeight:1.65,marginBottom:24 }}>{step.body}</div>
+              <div style={{ display:"flex",gap:10 }}>
+                {tourStep>1&&<button onClick={()=>setTourStep(s=>s-1)} style={{ flex:1,background:NYU.gray50,border:"none",borderRadius:12,padding:"12px",fontSize:14,fontWeight:600,color:NYU.gray600,cursor:"pointer",fontFamily:"'Inter',sans-serif" }}>← Back</button>}
+                <button onClick={()=>{ if(last){ setTourStep(null); localStorage.setItem("cliniq-tour-complete","1"); } else setTourStep(s=>s+1); }}
+                  style={{ flex:2,background:"#534AB7",border:"none",borderRadius:12,padding:"12px",fontSize:14,fontWeight:600,color:"white",cursor:"pointer",fontFamily:"'Inter',sans-serif" }}>
+                  {last?"Done 🎉":"Next →"}
+                </button>
+              </div>
+              <button onClick={()=>{ setTourStep(null); localStorage.setItem("cliniq-tour-complete","1"); }} style={{ width:"100%",background:"none",border:"none",fontSize:12,color:"#a89cbd",cursor:"pointer",marginTop:10,padding:"4px 0",fontFamily:"'Inter',sans-serif" }}>Skip tour</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── ERROR TOAST ── */}
       {errorToast&&(
