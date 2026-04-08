@@ -233,10 +233,10 @@ app.post('/api/patients/import', requireAuth, async (req, res) => {
       const discipline  = (r.discipline || 'General Dentistry').trim();
       const lastVisit   = (r.lastVisit || '').trim();
       if (!chartNumber && !procedure) { skipped++; continue; }
-      const id = `PT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5)}`;
-      // Always use P-YYYY-NNN format — chart number is stored separately, never used as the alias
-      const alias = `P-${year}-${String(baseCount + 1).padStart(3, '0')}`;
-      baseCount++;
+      // Trust id and alias from the client if they are well-formed; only fall back server-side
+      const id    = (r.id    && r.id.startsWith('PT-'))  ? r.id    : `PT-${Date.now().toString(36).toUpperCase()}`;
+      const alias = (r.alias && r.alias.startsWith('P-')) ? r.alias : `P-${year}-${String(baseCount + 1).padStart(3, '0')}`;
+      if (!(r.alias && r.alias.startsWith('P-'))) baseCount++;
       await pool.query(`
         INSERT INTO patients (id,user_id,alias,chart_number,procedure,discipline,last_visit,treatment_start,
           expected_completion,next_appt,next_appt_time,treatment_complete,lab_status,lab_sent_date,

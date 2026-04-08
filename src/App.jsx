@@ -1251,6 +1251,7 @@ RESPONSE RULES:
 
   const buildImportPreview = (rows, mapping) => {
     return rows.slice(0, 5).map((row, index) => ({
+      id:          `PT-${String(patients.length + index + 1).padStart(3, '0')}`,
       alias:       generateAlias(patients.length + index),
       chartNumber: row[mapping.chartNumber]||"",
       lastVisit:   row[mapping.lastVisit]||"",
@@ -1262,7 +1263,9 @@ RESPONSE RULES:
   const runImport = async () => {
     setImportLoading(true);
     try {
-      const payload = importRawRows.map(row => ({
+      const payload = importRawRows.map((row, index) => ({
+        id:          `PT-${String(patients.length + index + 1).padStart(3, '0')}`,
+        alias:       generateAlias(patients.length + index),
         chartNumber: row[importMapping.chartNumber]||"",
         lastVisit:   row[importMapping.lastVisit]||"",
         procedure:   row[importMapping.procedure]||"",
