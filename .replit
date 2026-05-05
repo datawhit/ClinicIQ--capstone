@@ -1,7 +1,11 @@
-modules = ["nodejs-22", "python-3.11", "postgresql-16"]
+modules = ["nodejs-20"]
+[deployment]
+deploymentTarget = "autoscale"
+run = ["node", "server.js"]
+build = ["npm", "run", "build"]
+
 [agent]
 expertMode = true
-integrations = ["github:1.0.0"]
 
 [workflows]
 runButton = "Project"
@@ -29,6 +33,10 @@ outputType = "webview"
 
 [[ports]]
 localPort = 3001
+externalPort = 3001
+
+[[ports]]
+localPort = 3005
 externalPort = 3002
 
 [[ports]]
@@ -36,12 +44,5 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 5001
-externalPort = 3000
-
-[[ports]]
-localPort = 5904
-externalPort = 3001
-
-[nix]
-channel = "stable-25_05"
+localPort = 24678
+externalPort = 3003

@@ -10,11 +10,8 @@ export default defineConfig({
     watch: {
       ignored: ["**/.local/**", "**/node_modules/**"]
     },
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      }
-    }
+    headers: {
+      'Cache-Control': 'no-store'
+    },
   }
 })

@@ -47,7 +47,7 @@ const TAB_DEFS = {
 };
 const DEFAULT_TAB_ORDER = ["overview","directory","goals","calendar","notebook"];
 
-const PROVIDER_ROLES = ["Faculty","D3 Student","D4 Student","GPR Resident","Specialist","Staff"];
+const PROVIDER_ROLES = ["Faculty","D3 Student","D4 Student","PG Resident","Specialist","Staff"];
 const STAT_DEFS = [
   { id:"total",    label:"Total Patients" },
   { id:"active",   label:"Active" },
@@ -154,9 +154,9 @@ const getPreAuthNudge = (patient) => {
   if (patient.preAuth !== "Submitted" || !patient.preAuthSubmittedDate) return null;
   const days = getDaysSince(patient.preAuthSubmittedDate);
   if (days === null) return null;
-  if (days >= PREAUTH_DAYS_MIN) return { level:"ready", days, label:`${days}d — check pre-auth`, color:"#059669", bg:"#dcfce7" };
-  if (days >= 14) return { level:"soon", days, label:`${days}d — pre-auth soon`, color:"#b45309", bg:"#fef3c7" };
-  if (days >= 10) return { level:"watch", days, label:`${days}d — pre-auth watch`, color:"#2563eb", bg:"#dbeafe" };
+  if (days >= PREAUTH_DAYS_MIN) return { level:"ready", days, label:`${days}d - check pre-auth`, color:"#059669", bg:"#dcfce7" };
+  if (days >= 14) return { level:"soon", days, label:`${days}d - pre-auth soon`, color:"#b45309", bg:"#fef3c7" };
+  if (days >= 10) return { level:"watch", days, label:`${days}d - pre-auth watch`, color:"#2563eb", bg:"#dbeafe" };
   return null;
 };
 
@@ -164,8 +164,8 @@ const getLabNudge = (patient) => {
   if (!["Sent"].includes(patient.labStatus) || !patient.labSentDate) return null;
   const days = getDaysSince(patient.labSentDate);
   if (days === null) return null;
-  if (days >= LAB_DAYS_MAX) return { level:"overdue", days, label:`${days}d — lab overdue`, color:"#dc2626", bg:"#fee2e2" };
-  if (days >= LAB_DAYS_MIN) return { level:"ready", days, label:`${days}d — check lab`, color:"#059669", bg:"#dcfce7" };
+  if (days >= LAB_DAYS_MAX) return { level:"overdue", days, label:`${days}d - lab overdue`, color:"#dc2626", bg:"#fee2e2" };
+  if (days >= LAB_DAYS_MIN) return { level:"ready", days, label:`${days}d - check lab`, color:"#059669", bg:"#dcfce7" };
   return null;
 };
 
@@ -256,6 +256,24 @@ const TREATMENT_PHASES = {
 };
 
 const PHASE_KEYS = ["0","I","II","III","IV","V"];
+
+// Auto-set treatment phase based on discipline
+const DISCIPLINE_TO_PHASE = {
+  "Endodontics":               "IV",
+  "Periodontics":              "II",
+  "Oral & Maxillofacial Surgery": "I",
+  "Oral Surgery":              "I",
+  "Prosthodontics":            "IV",
+  "Implant Dentistry":         "IV",
+  "Orthodontics":              "IV",
+  "Pediatric Dentistry":       "II",
+  "Dental Hygiene":            "V",
+  "Comprehensive Care":        "III",
+  "General Dentistry":         "III",
+  "Special Care Dentistry":    "II",
+  "Oral Medicine":             "III",
+};
+const getDisciplinePhase = (discipline) => DISCIPLINE_TO_PHASE[discipline] || "IV";
 
 const SPECIALTY_TYPES = [
   "Endodontics","Oral Surgery","Periodontics","Prosthodontics",
@@ -516,9 +534,10 @@ const daysUntil = (dateStr) => {
 
 const calculateUrgency = (patient) => {
   if (patient.treatmentComplete) return null;
+  const reasons = [];
+  if (patient.manualUrgent) reasons.push("Manually flagged urgent");
   const daysSinceSeen = daysDiff(patient.lastVisit);
   const daysToCompletion = daysUntil(patient.expectedCompletion);
-  const reasons = [];
   if (daysSinceSeen > 60) reasons.push(`Not seen in ${daysSinceSeen} days`);
   if (!patient.nextAppt) reasons.push("No follow-up scheduled");
   if (daysToCompletion !== null && daysToCompletion <= 30 && daysToCompletion >= 0) reasons.push(`Treatment due in ${daysToCompletion} days`);
@@ -567,6 +586,7 @@ const emptyPatient = {
   patientType:"In-Clinic", referringFaculty:"",
   // Predictive Nudge & Phase
   treatmentPhase:"IV",
+  manualUrgent: false,
   // Specialty Referral
   specialtyReferral:false, specialtyType:"", specialtyStatus:"Pending", specialtyReferralDate:"",
   // Transfer
@@ -743,6 +763,8 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [showForgotPw, setShowForgotPw] = useState(false);
+  const [loginMode, setLoginMode] = useState(()=> new URLSearchParams(window.location.search).get("signup")==="1" ? "signup" : "signin");
+  const [inviteCopied, setInviteCopied] = useState(false);
   const [forgotForm, setForgotForm] = useState({ email:"", newPassword:"", confirm:"" });
   const [forgotMsg, setForgotMsg] = useState({ type:"", text:"" });
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -777,6 +799,9 @@ export default function App() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [showNotifDrawer, setShowNotifDrawer] = useState(false);
+  const [dirtyPatientId, setDirtyPatientId] = useState(null);
+  const [saveSuccessId, setSaveSuccessId] = useState(null);
   const [isListeningNlp, setIsListeningNlp] = useState(false);
   const [notes, setNotes] = useState([]);
   const [activeNote, setActiveNote] = useState(null);
@@ -931,6 +956,7 @@ export default function App() {
       if (patient) schedulePatientSave(patient);
       return updated;
     });
+    setDirtyPatientId(id);
   };
 
   const addPatient = async () => {
@@ -1198,15 +1224,21 @@ RESPONSE RULES:
   };
 
   const handleLogin = async () => {
-    if (!loginForm.email||!loginForm.name) { setLoginError("Please enter your name and email."); return; }
+    if (!loginForm.email || !loginForm.name) { setLoginError("Please enter your name and email."); return; }
+    if (!loginForm.password) { setLoginError("Please enter a password."); return; }
     setLoginLoading(true); setLoginError("");
     try {
       const res = await fetch("/api/auth/login", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ email:loginForm.email, password:loginForm.password||"", name:loginForm.name, year:loginForm.year })
+        body:JSON.stringify({ email:loginForm.email, password:loginForm.password, name:loginForm.name, year:loginForm.year })
       });
       const data = await res.json();
-      if (!res.ok) { setLoginError(data.error||"Login failed"); setLoginLoading(false); return; }
+      if (!res.ok) {
+        const msg = res.status===401 ? "Incorrect password. Use \"Forgot password?\" to reset it." : data.error||"Login failed";
+        setLoginError(msg); setLoginLoading(false); return;
+      }
+      // Clear signup URL param after successful login
+      if (window.location.search) window.history.replaceState({}, "", window.location.pathname);
       setUser(data.user);
       await loadUserData();
     } catch { setLoginError("Connection error. Please try again."); }
@@ -1256,9 +1288,6 @@ RESPONSE RULES:
           setNotes(seedData.notes||[]);
           if (seedData.providers) setProviders(seedData.providers);
         }
-      }
-      if (!localStorage.getItem("cliniq-tour-complete")) {
-        setTourStep(1);
       }
     } catch { setLoginError("Connection error. Please try again."); }
     setLoginLoading(false);
@@ -1417,29 +1446,35 @@ RESPONSE RULES:
                 <span style={{ color:"white", fontSize:24, fontWeight:700 }}>C</span>
               </div>
               <h1 style={{ fontFamily:"'Fraunces', serif", fontSize:28, fontWeight:700, color:NYU.gray900, letterSpacing:"-0.02em" }}>ClinIQ</h1>
-              <p style={{ color:NYU.gray400, fontSize:14, marginTop:6 }}>NYU College of Dentistry · Clinical Caseload Manager</p>
+              <p style={{ color:NYU.gray400, fontSize:14, marginTop:6 }}>Clinical Caseload Manager for Health Professions Students</p>
             </div>
             <div style={{ background:"white", borderRadius:24, padding:32, boxShadow:"0 8px 40px rgba(107,33,168,0.1)", border:`1px solid ${NYU.gray100}` }}>
 
-              {/* Testing mode banner */}
-              <div style={{ background:"#fef9c3", border:"1px solid #fde047", borderRadius:10, padding:"8px 12px", marginBottom:20, display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:14 }}>🧪</span>
-                <span style={{ fontSize:12, color:"#92400e", fontWeight:500 }}>Testing mode — password not required</span>
-              </div>
-
               {!showForgotPw ? (
                 <>
-                  <h2 style={{ fontSize:18, fontWeight:700, color:NYU.gray900, marginBottom:6 }}>Sign in</h2>
-                  <p style={{ fontSize:13, color:NYU.gray400, marginBottom:24 }}>Use your NYU credentials to continue</p>
+                  {/* Mode toggle */}
+                  <div style={{ display:"flex", background:NYU.gray50, borderRadius:12, padding:4, marginBottom:24, gap:4 }}>
+                    {[{key:"signin",label:"Sign In"},{key:"signup",label:"Create Account"}].map(m=>(
+                      <button key={m.key} onClick={()=>{ setLoginMode(m.key); setLoginError(""); }} style={{ flex:1, padding:"8px 0", border:"none", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'Inter',sans-serif", background:loginMode===m.key?"white":"transparent", color:loginMode===m.key?T.purple:NYU.gray400, boxShadow:loginMode===m.key?"0 1px 4px rgba(107,33,168,0.1)":"none", transition:"all 0.15s" }}>{m.label}</button>
+                    ))}
+                  </div>
+
+                  <h2 style={{ fontSize:18, fontWeight:700, color:NYU.gray900, marginBottom:4 }}>
+                    {loginMode==="signup" ? "Create your account" : "Welcome back"}
+                  </h2>
+                  <p style={{ fontSize:13, color:NYU.gray400, marginBottom:22 }}>
+                    {loginMode==="signup" ? "Join ClinIQ — NYU dental caseload manager" : "Sign in to access your caseload"}
+                  </p>
+
                   <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
                     <div><label style={labelStyle}>Full Name</label><input style={inputStyle} placeholder="e.g. Whitney Johnson" value={loginForm.name} onChange={e=>setLoginForm(p=>({...p,name:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} /></div>
                     <div><label style={labelStyle}>NYU Email</label><input style={inputStyle} type="email" placeholder="wj1234@nyu.edu" value={loginForm.email} onChange={e=>setLoginForm(p=>({...p,email:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} /></div>
                     <div>
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
                         <label style={{ ...labelStyle, marginBottom:0 }}>Password</label>
-                        <button onClick={()=>{ setShowForgotPw(true); setForgotMsg({ type:"", text:"" }); }} style={{ background:"none", border:"none", fontSize:12, color:T.purple, cursor:"pointer", fontFamily:"'Inter', sans-serif", fontWeight:500, padding:0 }}>Forgot password?</button>
+                        {loginMode==="signin"&&<button onClick={()=>{ setShowForgotPw(true); setForgotMsg({ type:"", text:"" }); }} style={{ background:"none", border:"none", fontSize:12, color:T.purple, cursor:"pointer", fontFamily:"'Inter', sans-serif", fontWeight:500, padding:0 }}>Forgot password?</button>}
                       </div>
-                      <input style={inputStyle} type="password" placeholder="Optional during testing" value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} />
+                      <input style={inputStyle} type="password" placeholder={loginMode==="signup"?"Choose a strong password":"Enter your password"} value={loginForm.password} onChange={e=>setLoginForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleLogin()} />
                     </div>
                     <div>
                       <label style={labelStyle}>Student Year</label>
@@ -1458,11 +1493,13 @@ RESPONSE RULES:
                       <div style={{ fontSize:11, color:NYU.gray400, marginTop:6 }}>D1 and D2 students do not have active patient access.</div>
                     </div>
                     {loginError && <div style={{ background:NYU.redLight, borderRadius:10, padding:"10px 14px", fontSize:13, color:NYU.red }}>{loginError}</div>}
-                    <button className="action-btn" onClick={handleLogin} disabled={loginLoading} style={{ background:T.purple, color:"white", width:"100%", marginTop:4, padding:"13px 20px", fontSize:15, opacity:loginLoading?0.7:1 }}>{loginLoading?<><span className="spinner"/>Signing in…</>:"Sign In"}</button>
-                    <button onClick={handleDemoLogin} disabled={loginLoading} style={{ background:"white", color:"#534AB7", border:"2px solid #534AB7", borderRadius:12, width:"100%", padding:"13px 20px", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"'Inter',sans-serif", opacity:loginLoading?0.7:1 }}>🎓 Try Demo Mode — no account needed</button>
+                    <button className="action-btn" onClick={handleLogin} disabled={loginLoading} style={{ background:T.purple, color:"white", width:"100%", marginTop:4, padding:"13px 20px", fontSize:15, opacity:loginLoading?0.7:1 }}>
+                      {loginLoading ? <><span className="spinner"/>{loginMode==="signup"?"Creating account…":"Signing in…"}</> : loginMode==="signup" ? "Create Account" : "Sign In"}
+                    </button>
+                    {loginMode==="signin"&&<button onClick={handleDemoLogin} disabled={loginLoading} style={{ background:"white", color:"#534AB7", border:"2px solid #534AB7", borderRadius:12, width:"100%", padding:"13px 20px", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"'Inter',sans-serif", opacity:loginLoading?0.7:1 }}>🎓 Try Demo Mode — no account needed</button>}
                   </div>
                   <p style={{ fontSize:11, color:NYU.gray400, textAlign:"center", marginTop:20, lineHeight:1.5 }}>
-                    Production version will authenticate via NYU SSO.<br/>Patient data uses HIPAA-safe identifiers — no PHI stored or transmitted.
+                    Patient data uses HIPAA-safe identifiers — no PHI stored or transmitted.
                   </p>
                 </>
               ) : (
@@ -1507,10 +1544,12 @@ RESPONSE RULES:
                   <rect x="3" y="13.5" width="14" height="1.5" rx="0.75" fill={NYU.gray600}/>
                 </svg>
               </button>
-              <div style={{ width:30, height:30, borderRadius:10, background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <span style={{ color:"white", fontSize:14, fontWeight:700 }}>C</span>
-              </div>
-              <span style={{ color:NYU.gray900, fontSize:16, fontWeight:700, fontFamily:"'Fraunces', serif", letterSpacing:"-0.02em" }}>ClinIQ</span>
+              <button onClick={()=>{ setTab("overview"); setShowRosterPanel(false); setShowSettings(false); setMenuOpen(false); setDetailPatient(null); }} style={{ background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:8,padding:0 }}>
+                <div style={{ width:30, height:30, borderRadius:10, background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <span style={{ color:"white", fontSize:14, fontWeight:700 }}>C</span>
+                </div>
+                <span style={{ color:NYU.gray900, fontSize:16, fontWeight:700, fontFamily:"'Fraunces', serif", letterSpacing:"-0.02em" }}>ClinIQ</span>
+              </button>
 
               {menuOpen && (
                 <>
@@ -1579,9 +1618,8 @@ RESPONSE RULES:
             const urgentNonToday = patients.filter(p=>calculateUrgency(p)&&p.nextAppt!==todayStr);
             const getApptBadge = (p) => { const pa=getPreAuthNudge(p);const lb=getLabNudge(p); if(pa) return{label:pa.label,color:pa.color,bg:pa.bg}; if(lb) return{label:lb.label,color:lb.color,bg:lb.bg}; return null; };
             const nudges=[];
-            if(urgentNonToday.length) nudges.push({icon:"⚠️",title:`${urgentNonToday.length} patient${urgentNonToday.length!==1?"s":""} need follow-up`,desc:urgentNonToday.slice(0,2).map(p=>p.alias).join(", ")+(urgentNonToday.length>2?` +${urgentNonToday.length-2} more`:""),bg:"#fef3e2",border:"#f59e0b",text:"#92400e"});
             if(reqLeft>0) nudges.push({icon:"🎓",title:`${reqLeft} requirement${reqLeft!==1?"s":""} to go`,desc:"Keep logging visits to stay on track for graduation.",bg:"#eef6ff",border:"#3b82f6",text:"#1e40af"});
-            if(!nudges.length) nudges.push({icon:"✅",title:"You're all caught up!",desc:"No urgent items — great work keeping your caseload on track.",bg:"#ecfdf5",border:"#10b981",text:"#065f46"});
+            if(!nudges.length) nudges.push({icon:"✅",title:"You're all caught up!",desc:"No urgent items. Great work keeping your caseload on track.",bg:"#ecfdf5",border:"#10b981",text:"#065f46"});
             const nudge=nudges[0];
             return (
               <div style={{ padding:"20px 16px" }}>
@@ -1591,11 +1629,11 @@ RESPONSE RULES:
                   {[
                     {label:"Today's patients",value:todayPts.length,bg:"#EEEDFE",color:"#3C3489",onClick:()=>{ if(todayPts.length===0){ showError("No appointments scheduled for today."); } else { document.getElementById("today-appts-section")?.scrollIntoView({ behavior:"smooth" }); } }},
                     {label:"Pending items",value:pendingCount,bg:"#FAEEDA",color:"#633806",onClick:()=>setShowPendingSheet(true)},
-                    {label:"Req. left",value:reqLeft,bg:"#E1F5EE",color:"#085041",onClick:()=>{ setTab("goals"); setShowAllGoals(false); }},
+                    {label:"Requirements",value:`${totalRequired>0?Math.round((totalCompleted/totalRequired)*100):0}% done`,fontSize:19,bg:"#E1F5EE",color:"#085041",onClick:()=>{ setTab("goals"); setShowAllGoals(false); }},
                   ].map(s=>(
                     <div key={s.label} onClick={s.onClick} style={{ flex:1,background:s.bg,borderRadius:16,padding:"14px 10px",textAlign:"center",minWidth:0,cursor:"pointer",transition:"transform 0.1s" }}
                       onMouseEnter={e=>e.currentTarget.style.transform="scale(1.03)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-                      <div style={{ fontSize:26,fontWeight:700,color:s.color,fontFamily:"'Fraunces', serif",lineHeight:1 }}>{s.value}</div>
+                      <div style={{ fontSize:s.fontSize||26,fontWeight:700,color:s.color,fontFamily:"'Fraunces', serif",lineHeight:1 }}>{s.value}</div>
                       <div style={{ fontSize:11,color:s.color,marginTop:5,opacity:0.85,lineHeight:1.3 }}>{s.label}</div>
                     </div>
                   ))}
@@ -1620,9 +1658,9 @@ RESPONSE RULES:
                 <div id="today-appts-section" style={{ fontSize:11,fontWeight:700,color:"#a89cbd",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12 }}>Today's appointments</div>
                 {todayPts.length===0?(
                   <div style={{ background:"white",borderRadius:16,padding:"32px 20px",textAlign:"center",border:"1px solid rgba(107,33,168,0.08)",color:"#a89cbd",marginBottom:24 }}>
-                    <div style={{ fontSize:28,marginBottom:10 }}>📅</div>
                     <div style={{ fontSize:15,fontWeight:600,color:"#6b5f7a",marginBottom:6 }}>No appointments today</div>
-                    <div style={{ fontSize:13 }}>Tap + to add a patient or use Quick Log below.</div>
+                    <div style={{ fontSize:13 }}>Schedule a patient to see them here.</div>
+                    <button onClick={()=>{ setApptModalMode("new"); setApptDraft({ patientId:"", date:todayStr, time:"" }); setShowApptModal(true); }} style={{ marginTop:16,background:T.purple,color:"white",border:"none",borderRadius:99,padding:"10px 24px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif" }}>+ Schedule Patient</button>
                   </div>
                 ):(
                   <div style={{ display:"flex",flexDirection:"column",gap:10,marginBottom:24 }}>
@@ -1683,7 +1721,7 @@ RESPONSE RULES:
                 onChange={e=>setRosterSearch(e.target.value)}
               />
               <div style={{ display:"flex",gap:8,marginBottom:16,overflowX:"auto",paddingBottom:4 }}>
-                {["All","Urgent","F/U Needed","Complete"].map(f=>(
+                {["All","Active","F/U Needed","Complete"].map(f=>(
                   <button key={f} onClick={()=>setFilter(f)} style={{ background:filter===f?"#534AB7":"#ede9f5",color:filter===f?"white":"#6b5f7a",border:"none",borderRadius:99,padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'Inter',sans-serif",whiteSpace:"nowrap",flexShrink:0,transition:"all 0.15s" }}>{f}</button>
                 ))}
               </div>
@@ -1714,6 +1752,7 @@ RESPONSE RULES:
                       <div style={{ flex:1,minWidth:0 }}>
                         <div style={{ fontWeight:600,fontSize:15,color:"#1e1428",marginBottom:2 }}>{patient.alias}</div>
                         <div style={{ fontSize:12,color:"#a89cbd",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{patient.discipline} · {patient.procedure||"No procedure"}</div>
+                        {(()=>{ const pred=predictCompletion(patient); if(!pred||pred.daysOut===0) return null; return <div style={{ fontSize:11,color:"#b0a4c0",marginTop:2 }}>Est. completion ~{pred.date}</div>; })()}
                         {(preAuthNudge||labNudge)&&(
                           <div style={{ display:"flex",gap:6,marginTop:4,flexWrap:"wrap" }}>
                             {preAuthNudge&&<span style={{ fontSize:10,fontWeight:600,color:preAuthNudge.color,background:preAuthNudge.bg,borderRadius:99,padding:"2px 8px" }}>📄 {preAuthNudge.label}</span>}
@@ -1772,21 +1811,25 @@ RESPONSE RULES:
 
             const ApptChip=({ appt,compact })=>{
               const conflict = appt.type==="confirmed" && hasConflict(appt.patient.nextAppt, appt.patient.nextApptTime, null);
+              const hasPaired = appt.type==="confirmed" && !!appt.patient?.handoffPartner;
+              const borderColor = conflict ? NYU.red : hasPaired ? "#0891b2" : appt.color;
+              const bgColor = conflict ? "#fee2e2" : hasPaired ? "#f0f9ff" : appt.bg;
               return (
-                <div style={{ background:conflict?"#fee2e2":appt.bg,borderLeft:`3px solid ${conflict?NYU.red:appt.color}`,borderRadius:6,padding:compact?"2px 6px":"5px 8px",marginBottom:3,cursor:"pointer",transition:"opacity 0.15s",position:"relative" }}
+                <div style={{ background:bgColor,borderLeft:`3px solid ${borderColor}`,borderRadius:6,padding:compact?"2px 6px":"5px 8px",marginBottom:3,cursor:"pointer",transition:"opacity 0.15s",position:"relative" }}
                   onMouseEnter={e=>e.currentTarget.style.opacity="0.8"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
                   <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:4 }}>
-                    <div style={{ fontSize:compact?10:11,fontWeight:700,color:conflict?NYU.red:appt.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1 }}
+                    <div style={{ fontSize:compact?10:11,fontWeight:700,color:conflict?NYU.red:hasPaired?"#0891b2":appt.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1 }}
                       onClick={()=>setDetailPatient(appt.patient.id)}>
                       {appt.type==="suggested"?"💡 ":"📌 "}{appt.label}
                     </div>
+                    {hasPaired&&<span style={{ fontSize:9,color:"#0891b2",background:"#e0f2fe",borderRadius:99,padding:"1px 5px",fontWeight:700,flexShrink:0 }}>🤝</span>}
                     {appt.type==="confirmed"&&!compact&&(
                       <button onClick={e=>{ e.stopPropagation(); setApptModalMode("edit"); setApptDraft({ patientId:appt.patient.id, date:appt.patient.nextAppt, time:appt.patient.nextApptTime||"" }); setShowApptModal(true); }}
-                        style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,color:appt.color,padding:"0 2px",flexShrink:0,fontFamily:"'Inter', sans-serif" }}>✎</button>
+                        style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,color:borderColor,padding:"0 2px",flexShrink:0,fontFamily:"'Inter', sans-serif" }}>✎</button>
                     )}
                   </div>
                   {appt.time&&!compact&&<div style={{ fontSize:10,color:conflict?NYU.red:NYU.gray400,marginTop:1,fontWeight:conflict?700:400 }}>{conflict?"⚠ Conflict · ":""}{appt.time}</div>}
-                  {!compact&&<div style={{ fontSize:10,color:NYU.gray400,marginTop:1 }}>{appt.sublabel}</div>}
+                  {!compact&&<div style={{ fontSize:10,color:NYU.gray400,marginTop:1 }}>{hasPaired?`🤝 w/ ${appt.patient.handoffPartner}`:appt.sublabel}</div>}
                 </div>
               );
             };
@@ -1992,9 +2035,9 @@ RESPONSE RULES:
                     })}
                     {Object.entries(apptMap).filter(([date])=>date>=fmt(new Date())).length===0&&(
                       <div style={{ textAlign:"center",padding:"40px 20px",color:NYU.gray400 }}>
-                        <div style={{ fontSize:32,marginBottom:8 }}>📅</div>
-                        <div style={{ fontSize:14,fontWeight:500 }}>No upcoming appointments</div>
-                        <div style={{ fontSize:12,marginTop:4 }}>Click any empty slot on the calendar to add one</div>
+                        <div style={{ fontSize:14,fontWeight:500,marginBottom:6 }}>No upcoming appointments</div>
+                        <div style={{ fontSize:12,marginBottom:16 }}>Schedule a patient to get started.</div>
+                        <button onClick={()=>{ setApptModalMode("new"); setApptDraft({ patientId:"", date:fmt(new Date()), time:"" }); setShowApptModal(true); }} style={{ background:T.purple,color:"white",border:"none",borderRadius:99,padding:"10px 24px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif" }}>+ Schedule Patient</button>
                       </div>
                     )}
                   </div>
@@ -2715,18 +2758,25 @@ RESPONSE RULES:
             <div style={{ maxWidth:1100,margin:"0 auto",padding:"28px 32px 80px" }}>
 
               {/* Hero card — shows alias prominently */}
-              <div style={{ background:"white",borderRadius:20,padding:"24px 20px",marginBottom:16,border:`1px solid ${NYU.gray100}`,display:"flex",alignItems:"center",gap:16 }}>
+              <div style={{ background:"white",borderRadius:20,padding:"24px 20px",marginBottom:16,border:patient.manualUrgent?`1px solid #f87171`:`1px solid ${NYU.gray100}`,display:"flex",alignItems:"center",gap:16 }}>
                 <div style={{ width:60,height:60,borderRadius:18,background:avatarMeta.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
                   <span style={{ fontSize:16,fontWeight:700,color:avatarMeta.color,letterSpacing:"0.04em" }}>{avatarMeta.initial}</span>
                 </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700,fontSize:22,color:NYU.gray900,fontFamily:"'Fraunces', serif" }}>{patient.alias}</div>
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                    <div style={{ fontWeight:700,fontSize:22,color:NYU.gray900,fontFamily:"'Fraunces', serif" }}>{patient.alias}</div>
+                    {patient.manualUrgent&&<span style={{ fontSize:11,fontWeight:700,color:"#dc2626",background:"#fee2e2",padding:"3px 10px",borderRadius:99 }}>URGENT</span>}
+                  </div>
                   <div style={{ fontSize:13,color:NYU.gray400,marginTop:2 }}>{patient.id} · {patient.discipline}</div>
-                  <div style={{ marginTop:8,display:"flex",gap:6,flexWrap:"wrap" }}>
+                  {(()=>{ const pred=predictCompletion(patient); if(!pred||pred.daysOut===0) return null; return <div style={{ fontSize:12,color:"#b0a4c0",marginTop:3 }}>Est. completion ~{pred.date}</div>; })()}
+                  <div style={{ marginTop:8,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
                     <span style={{ fontSize:12,padding:"4px 12px",borderRadius:99,background:meta.bg,color:meta.color,fontWeight:600 }}>{status}</span>
-                    {urgency&&<span style={{ fontSize:12,padding:"4px 12px",borderRadius:99,background:NYU.orangeLight,color:NYU.orange,fontWeight:600 }}>⚠ Urgent</span>}
                     {preAuthNudge&&<span style={{ fontSize:12,padding:"4px 12px",borderRadius:99,background:preAuthNudge.bg,color:preAuthNudge.color,fontWeight:600 }}>📄 {preAuthNudge.label}</span>}
                     {labNudge&&<span style={{ fontSize:12,padding:"4px 12px",borderRadius:99,background:labNudge.bg,color:labNudge.color,fontWeight:600 }}>🧪 {labNudge.label}</span>}
+                    <button onClick={()=>updateField(patient.id,"manualUrgent",!patient.manualUrgent)}
+                      style={{ fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:99,border:"none",cursor:"pointer",fontFamily:"'Inter',sans-serif",background:patient.manualUrgent?"#fee2e2":"#f3f0f7",color:patient.manualUrgent?"#dc2626":"#9e8bb0",marginLeft:"auto",flexShrink:0 }}>
+                      {patient.manualUrgent?"✕ Remove Urgent Flag":"⚑ Flag as Urgent"}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2778,97 +2828,32 @@ RESPONSE RULES:
                 </div>
               ); })()}
 
-              {/* ── Predictive Analytics Card ── */}
+
+              {/* Treatment Phase — auto-set from discipline, read-only */}
               {(()=>{
-                const pred = predictCompletion(patient);
-                if (!pred) return null;
-                const confColor = pred.confidence==="high" ? NYU.green : pred.confidence==="medium" ? NYU.amber : NYU.gray400;
-                const confBg    = pred.confidence==="high" ? "#dcfce7" : pred.confidence==="medium" ? "#fef3c7" : NYU.gray100;
-                const confLabel = pred.confidence==="high" ? "High confidence" : pred.confidence==="medium" ? "Medium confidence" : "Low confidence";
-                const visitPct  = pred.benchmark > 0 ? Math.min(100, Math.round((pred.visitsLogged / pred.benchmark) * 100)) : 0;
-                return (
-                  <div style={{ background:`linear-gradient(135deg, ${T.purpleDeep}, ${T.purpleDark})`,borderRadius:16,padding:"18px 20px",marginBottom:16,color:"white" }}>
-                    <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
-                      <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-                        <span style={{ fontSize:16 }}>🔮</span>
-                        <span style={{ fontWeight:700,fontSize:13 }}>Completion Estimate</span>
-                      </div>
-                      <span style={{ fontSize:11,fontWeight:600,color:confColor,background:confBg,borderRadius:99,padding:"3px 10px" }}>{confLabel}</span>
-                    </div>
-
-                    {pred.daysOut===0 ? (
-                      <div style={{ fontSize:20,fontWeight:700,marginBottom:4 }}>Ready for completion ✓</div>
-                    ) : (
-                      <>
-                        <div style={{ marginBottom:12 }}>
-                          <div style={{ fontSize:11,opacity:0.7,marginBottom:3,textTransform:"uppercase",letterSpacing:"0.06em" }}>Projected date</div>
-                          <div style={{ fontSize:22,fontWeight:700,letterSpacing:"-0.02em" }}>{pred.date}</div>
-                          {pred.bestCaseDate && (
-                            <div style={{ fontSize:12,opacity:0.75,marginTop:3 }}>
-                              Best case (no delays): <span style={{ fontWeight:600 }}>{pred.bestCaseDate}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Visit progress bar */}
-                        <div style={{ marginBottom:pred.factors.length>0?12:0 }}>
-                          <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,opacity:0.8,marginBottom:5 }}>
-                            <span>Visit progress</span>
-                            <span>{pred.visitsLogged} / {pred.benchmark} visits · {pred.avgInterval}d avg interval</span>
-                          </div>
-                          <div style={{ background:"rgba(255,255,255,0.2)",borderRadius:99,height:6,overflow:"hidden" }}>
-                            <div style={{ width:`${visitPct}%`,height:"100%",background:"rgba(255,255,255,0.85)",borderRadius:99,transition:"width 0.5s ease" }}/>
-                          </div>
-                        </div>
-
-                        {/* Delay factors */}
-                        {pred.factors.length>0 && (
-                          <div style={{ borderTop:"1px solid rgba(255,255,255,0.15)",paddingTop:10,marginTop:2 }}>
-                            <div style={{ fontSize:11,opacity:0.7,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.06em" }}>Active delays (+{pred.delayDays}d total)</div>
-                            {pred.factors.map((f,i)=>(
-                              <div key={i} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,marginBottom:4 }}>
-                                <span style={{ opacity:0.9 }}>{f.icon} {f.label}</span>
-                                <span style={{ fontWeight:600,background:"rgba(255,255,255,0.15)",borderRadius:99,padding:"2px 8px" }}>+{f.days}d</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Treatment Phase */}
-              {(()=>{
-                const phaseNudge = getPhaseNudge(patient);
-                const predAppt = getPredictedNextAppt(patient);
+                const autoPhaseKey = getDisciplinePhase(patient.discipline);
+                const phaseData = TREATMENT_PHASES[autoPhaseKey];
+                const phaseNudge = getPhaseNudge({...patient, treatmentPhase: autoPhaseKey});
+                const predAppt = getPredictedNextAppt({...patient, treatmentPhase: autoPhaseKey});
                 const isOpen = expandedSections.includes("treatmentPhase");
                 return (
                   <div style={{ background:"white",borderRadius:16,marginBottom:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
                     <div onClick={()=>setExpandedSections(prev=>isOpen?prev.filter(s=>s!=="treatmentPhase"):[...prev,"treatmentPhase"])} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",cursor:"pointer" }}>
                       <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                         <div style={{ fontWeight:600,fontSize:13,color:NYU.gray900 }}>Treatment Phase</div>
+                        <span style={{ fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:99,background:phaseData?.bg||NYU.gray100,color:phaseData?.color||NYU.gray600 }}>Phase {autoPhaseKey} — {phaseData?.short}</span>
                         {phaseNudge&&<span style={{ fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:99,background:phaseNudge.level==="overdue"?"#fee2e2":phaseNudge.level==="due"?"#fef9c3":"#dcfce7",color:phaseNudge.level==="overdue"?NYU.red:phaseNudge.level==="due"?"#92400e":"#15803d" }}>{phaseNudge.label}</span>}
                       </div>
                       <span style={{ fontSize:14,color:NYU.gray400,transition:"transform 0.18s",transform:isOpen?"rotate(90deg)":"rotate(0deg)" }}>›</span>
                     </div>
                     {isOpen&&(
                       <div style={{ padding:"0 20px 18px" }}>
-                        <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:12 }}>
-                          {Object.entries(TREATMENT_PHASES).map(([key,ph])=>{
-                            const active = (patient.treatmentPhase||"IV")===key;
-                            return <button key={key} className="pill-btn" onClick={()=>updateField(patient.id,"treatmentPhase",key)} style={{ background:active?T.purple:NYU.gray100,color:active?"white":NYU.gray600,fontSize:11,fontWeight:600 }}>{key}: {ph.label}</button>;
-                          })}
+                        <div style={{ fontSize:12,color:NYU.gray500,background:NYU.gray50,borderRadius:8,padding:"10px 14px",lineHeight:1.6,marginBottom:phaseData?.followUpDays?8:0 }}>
+                          {phaseData?.description}
                         </div>
-                        {patient.treatmentPhase&&TREATMENT_PHASES[patient.treatmentPhase]&&(
-                          <div style={{ fontSize:12,color:NYU.gray500,background:NYU.gray50,borderRadius:8,padding:"8px 12px",lineHeight:1.5 }}>
-                            {TREATMENT_PHASES[patient.treatmentPhase].description}
-                            {TREATMENT_PHASES[patient.treatmentPhase].followUpDays&&<span style={{ marginLeft:6,fontSize:11,fontWeight:600,color:T.purple }}>· Recall every {TREATMENT_PHASES[patient.treatmentPhase].followUpDays} days</span>}
-                          </div>
-                        )}
+                        {phaseData?.followUpDays&&<div style={{ fontSize:11,fontWeight:600,color:T.purple,marginBottom:predAppt?10:0 }}>Recall every {phaseData.followUpDays} days</div>}
                         {predAppt&&(
-                          <div style={{ marginTop:12,fontSize:12,color:NYU.gray600,display:"flex",alignItems:"center",gap:6 }}>
+                          <div style={{ marginTop:8,fontSize:12,color:NYU.gray600,display:"flex",alignItems:"center",gap:6 }}>
                             <span style={{ fontSize:14 }}>🔮</span>
                             <span><b>Predicted next visit:</b> {predAppt.date} ({predAppt.day}) — based on {predAppt.sampleSize} prior visits</span>
                           </div>
@@ -3155,6 +3140,21 @@ RESPONSE RULES:
                 </div>
               )}
             </div>
+
+            {/* Sticky Save Changes bar */}
+            {dirtyPatientId===patient.id&&(
+              <div style={{ position:"sticky",bottom:0,left:0,right:0,background:"white",borderTop:"1px solid #f3f0f7",padding:"12px 20px",display:"flex",alignItems:"center",gap:12,zIndex:20,boxShadow:"0 -2px 16px rgba(83,74,183,0.10)" }}>
+                <div style={{ flex:1,fontSize:13,color:NYU.gray500 }}>{saveSuccessId===patient.id?"✓ Changes saved!":"Unsaved changes"}</div>
+                <button onClick={async()=>{
+                  const p=patients.find(x=>x.id===patient.id);
+                  if(!p) return;
+                  await fetch(`/api/patients/${p.id}`,{ method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p) });
+                  setSaveSuccessId(p.id);
+                  setDirtyPatientId(null);
+                  setTimeout(()=>setSaveSuccessId(null),2000);
+                }} style={{ background:T.purple,color:"white",border:"none",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif" }}>Save Changes</button>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -3324,8 +3324,67 @@ RESPONSE RULES:
         );
       })()}
 
+      {/* ── FLOATING CHAT PANEL ── */}
+      {chatOpen&&(
+        <div style={{ position:"fixed",bottom:136,right:16,width:340,maxWidth:"calc(100vw - 32px)",height:480,background:"white",borderRadius:20,boxShadow:"0 8px 40px rgba(83,74,183,0.25)",zIndex:2500,display:"flex",flexDirection:"column",overflow:"hidden",border:"1px solid rgba(107,33,168,0.12)" }}>
+          <div style={{ background:`linear-gradient(135deg,${T.purple},${T.purpleDark})`,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,flexShrink:0 }}>
+            <div style={{ width:28,height:28,borderRadius:8,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+              <span style={{ color:"white",fontSize:13,fontWeight:700 }}>✦</span>
+            </div>
+            <div style={{ flex:1,minWidth:0 }}>
+              <div style={{ color:"white",fontWeight:700,fontSize:13 }}>ClinIQ Assistant</div>
+              <div style={{ color:"rgba(255,255,255,0.65)",fontSize:10,marginTop:1 }}>Caseload-aware · HIPAA-safe</div>
+            </div>
+            <button onClick={()=>{ setChatOpen(false); setTab("ai"); }} title="Expand to full screen" style={{ background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,color:"white",fontSize:14,cursor:"pointer",width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>⛶</button>
+            <button onClick={()=>setChatOpen(false)} title="Minimize" style={{ background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,color:"white",fontSize:18,cursor:"pointer",width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,lineHeight:1 }}>−</button>
+          </div>
+          <div style={{ flex:1,overflowY:"auto",padding:"12px 14px 8px",display:"flex",flexDirection:"column",gap:10 }}>
+            {chatMessages.length<=1&&(
+              <div style={{ padding:"0 0 8px" }}>
+                <div style={{ fontSize:11,fontWeight:700,color:"#a89cbd",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8 }}>Try asking</div>
+                <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
+                  {["Am I on track?","Who needs follow-up?","Any pre-auths ready?"].map(q=>(
+                    <button key={q} onClick={()=>setChatInput(q)} style={{ background:"white",border:"1px solid rgba(107,33,168,0.25)",borderRadius:99,padding:"6px 12px",fontSize:11,color:T.purple,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:500 }}>{q}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {chatMessages.map((msg,i)=>(
+              <div key={i} style={{ display:"flex",justifyContent:msg.role==="user"?"flex-end":"flex-start",alignItems:"flex-end",gap:6 }}>
+                {msg.role==="assistant"&&(
+                  <div style={{ width:24,height:24,borderRadius:7,background:T.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                    <span style={{ color:"white",fontSize:10,fontWeight:700 }}>✦</span>
+                  </div>
+                )}
+                <div style={{ maxWidth:"80%",padding:"10px 13px",borderRadius:msg.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:msg.role==="user"?T.purple:"white",color:msg.role==="user"?"white":"#1e1428",fontSize:13,lineHeight:1.5,border:msg.role==="assistant"?"1px solid rgba(107,33,168,0.08)":"none",boxShadow:msg.role==="assistant"?"0 1px 4px rgba(107,33,168,0.05)":"none" }}>
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {chatLoading&&(
+              <div style={{ display:"flex",alignItems:"flex-end",gap:6 }}>
+                <div style={{ width:24,height:24,borderRadius:7,background:T.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><span style={{ color:"white",fontSize:10 }}>✦</span></div>
+                <div style={{ background:"white",border:"1px solid rgba(107,33,168,0.08)",borderRadius:"16px 16px 16px 4px",padding:"10px 14px",display:"flex",gap:4,alignItems:"center" }}>
+                  {[0,1,2].map(i=><div key={i} style={{ width:6,height:6,borderRadius:"50%",background:T.purple,opacity:0.5,animation:`bounce ${0.5+i*0.15}s ease-in-out infinite alternate` }}/>)}
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ padding:"10px 12px",borderTop:"1px solid #f3f0f7",display:"flex",gap:6,alignItems:"flex-end",background:"white",flexShrink:0 }}>
+            <textarea rows={1} style={{ flex:1,borderRadius:10,border:"1.5px solid #e5dff0",padding:"8px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",resize:"none",outline:"none",lineHeight:1.4,background:"#f8f6fb" }}
+              placeholder="Ask about your caseload..."
+              value={chatInput}
+              onChange={e=>setChatInput(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat();} }}
+            />
+            <button onClick={sendChat} disabled={chatLoading||!chatInput.trim()}
+              style={{ background:T.purple,border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",color:"white",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:(!chatInput.trim()||chatLoading)?0.5:1 }}>↑</button>
+          </div>
+        </div>
+      )}
+
       {/* ── FLOATING AI BUTTON ── */}
-      <button className="float-right float-ai-btn" onClick={()=>setTab("ai")} style={{ position:"fixed",bottom:72,right:16,zIndex:2000,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},${T.purpleDark})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${T.purple}55`,fontSize:22 }} title="Ask AI">
+      <button className="float-right float-ai-btn" onClick={()=>setChatOpen(c=>!c)} style={{ position:"fixed",bottom:72,right:16,zIndex:2000,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},${T.purpleDark})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${T.purple}55`,fontSize:22 }} title="Ask AI">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="9" stroke="white" strokeWidth="1.6"/><path d="M7.5 11h.02M11 11h.02M14.5 11h.02" stroke="white" strokeWidth="2.2" strokeLinecap="round"/></svg>
       </button>
 
@@ -3345,7 +3404,54 @@ RESPONSE RULES:
             </button>
           );
         })}
+        {/* Bell — notification drawer */}
+        {(()=>{
+          const notifCount = patients.filter(p=>p.manualUrgent||getPreAuthNudge(p)||getLabNudge(p)).length;
+          return (
+            <button onClick={()=>setShowNotifDrawer(v=>!v)} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"4px 0",color:showNotifDrawer?"#534AB7":"#a89cbd",transition:"color 0.15s",minHeight:56,position:"relative" }}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2.5a6 6 0 0 1 6 6v3.5l1.5 1.5v1H2.5v-1L4 12V8.5a6 6 0 0 1 6-6z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/><path d="M8 16.5a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+              {notifCount>0&&<span style={{ position:"absolute",top:6,right:"50%",transform:"translateX(6px)",background:"#ef4444",color:"white",borderRadius:99,fontSize:9,fontWeight:700,minWidth:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",lineHeight:1 }}>{notifCount}</span>}
+              <span style={{ fontSize:10,fontWeight:showNotifDrawer?700:500,fontFamily:"'Inter',sans-serif",letterSpacing:"0.01em" }}>Alerts</span>
+            </button>
+          );
+        })()}
       </div>
+
+      {/* ── NOTIFICATION DRAWER ── */}
+      {showNotifDrawer&&(
+        <>
+          <div onClick={()=>setShowNotifDrawer(false)} style={{ position:"fixed",inset:0,zIndex:1090 }}/>
+          <div style={{ position:"fixed",bottom:56,left:0,right:0,maxHeight:"70vh",overflowY:"auto",background:"white",borderTop:"1px solid #f3f0f7",zIndex:1100,borderRadius:"20px 20px 0 0",boxShadow:"0 -4px 30px rgba(83,74,183,0.13)",paddingBottom:8 }}>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px 10px" }}>
+              <div style={{ fontWeight:700,fontSize:16,color:NYU.gray900,fontFamily:"'Fraunces',serif" }}>Alerts</div>
+              <button onClick={()=>setShowNotifDrawer(false)} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:NYU.gray400,lineHeight:1 }}>×</button>
+            </div>
+            {(()=>{
+              const items=[];
+              patients.forEach(p=>{
+                if(p.manualUrgent) items.push({ icon:"⚑",color:"#dc2626",bg:"#fee2e2",label:`${p.alias} flagged as urgent`,sub:"Manual urgent flag set",patient:p });
+                const pa=getPreAuthNudge(p);
+                if(pa) items.push({ icon:"📄",color:pa.color,bg:pa.bg,label:`${p.alias}: Pre-Auth`,sub:pa.label,patient:p });
+                const lb=getLabNudge(p);
+                if(lb) items.push({ icon:"🧪",color:lb.color,bg:lb.bg,label:`${p.alias}: Lab Status`,sub:lb.label,patient:p });
+              });
+              const urgencyItems = patients.filter(p=>{ const u=calculateUrgency(p); return u&&!p.manualUrgent; }).slice(0,5);
+              urgencyItems.forEach(p=>items.push({ icon:"⚠",color:NYU.orange,bg:NYU.orangeLight,label:`${p.alias}: Follow-up needed`,sub:"High urgency",patient:p }));
+              if(items.length===0) return <div style={{ padding:"32px 20px",textAlign:"center",color:NYU.gray400,fontSize:14 }}>All clear: no alerts right now 🎉</div>;
+              return items.map((item,i)=>(
+                <div key={i} onClick={()=>{ setDetailPatient(item.patient.id); setShowNotifDrawer(false); }} style={{ display:"flex",alignItems:"center",gap:12,padding:"11px 20px",cursor:"pointer",borderBottom:`1px solid ${NYU.gray100}` }}>
+                  <div style={{ width:36,height:36,borderRadius:10,background:item.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0 }}>{item.icon}</div>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:13,fontWeight:600,color:NYU.gray900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{item.label}</div>
+                    <div style={{ fontSize:11,color:item.color,fontWeight:500,marginTop:1 }}>{item.sub}</div>
+                  </div>
+                  <span style={{ fontSize:14,color:NYU.gray300 }}>›</span>
+                </div>
+              ));
+            })()}
+          </div>
+        </>
+      )}
 
       {/* ── ADD PROVIDER MODAL ── */}
       {showAddProviderModal&&newProvider&&(
@@ -3371,7 +3477,7 @@ RESPONSE RULES:
                 <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Role</label>
                 <select value={newProvider.role||"Faculty"} onChange={e=>setNewProvider(p=>({...p,role:e.target.value}))}
                   style={{ width:"100%",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",outline:"none",background:"white" }}>
-                  {["Faculty","D3 Student","D4 Student","GPR Resident","Specialist","Staff"].map(r=><option key={r} value={r}>{r}</option>)}
+                  {PROVIDER_ROLES.map(r=><option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
@@ -3421,7 +3527,7 @@ RESPONSE RULES:
                 <label style={{ fontSize:11,fontWeight:700,color:NYU.gray400,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,display:"block" }}>Role</label>
                 <select value={editProvider.role||"Faculty"} onChange={e=>setEditProvider(p=>({...p,role:e.target.value}))}
                   style={{ width:"100%",border:`1.5px solid ${NYU.gray200}`,borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"'Inter',sans-serif",color:"#1e1428",outline:"none",background:"white" }}>
-                  {["Faculty","D3 Student","D4 Student","GPR Resident","Specialist","Staff"].map(r=><option key={r} value={r}>{r}</option>)}
+                  {PROVIDER_ROLES.map(r=><option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
@@ -3461,24 +3567,24 @@ RESPONSE RULES:
             <div style={{ width:36,height:4,background:"#e5dff0",borderRadius:2,margin:"0 auto 20px" }}/>
             <div style={{ fontFamily:"'Fraunces',serif",fontWeight:700,fontSize:22,color:"#1e1428",marginBottom:16 }}>Pending items</div>
             {(()=>{
-              const pending=patients.filter(p=>!p.treatmentComplete&&(
-                p.labStatus==="In Lab"||p.preAuthStatus==="Pending"||p.urgency==="HIGH"||p.urgency==="MEDIUM"
-              ));
+              const pending=patients.filter(p=>{ const pa=getPreAuthNudge(p),lb=getLabNudge(p); return !p.treatmentComplete&&(pa||lb||(!p.nextAppt&&calculateStatus(p)==="F/U Appt Needed")); });
               if(!pending.length) return <div style={{ textAlign:"center",padding:"40px 20px",color:NYU.gray400,fontSize:14 }}>No pending items — you're all clear!</div>;
-              return pending.map(p=>(
-                <div key={p.id} onClick={()=>{ setSelectedPatient(p); setShowPendingSheet(false); }} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 0",borderBottom:"1px solid #f3f0f7",cursor:"pointer" }}>
-                  <div style={{ width:36,height:36,borderRadius:11,background:p.urgency==="HIGH"?"#fee2e2":p.urgency==="MEDIUM"?"#fef3c7":"#f3f0f7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
-                    <span style={{ fontSize:16 }}>{p.urgency==="HIGH"?"⚠️":p.labStatus==="In Lab"?"🧪":"⏳"}</span>
-                  </div>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontWeight:600,fontSize:14,color:"#1e1428" }}>{p.alias}</div>
-                    <div style={{ fontSize:12,color:NYU.gray400 }}>
-                      {[p.urgency==="HIGH"&&"High urgency",p.urgency==="MEDIUM"&&"Needs follow-up",p.labStatus==="In Lab"&&"Lab pending",p.preAuthStatus==="Pending"&&"Pre-auth pending"].filter(Boolean).join(" · ")}
+              return pending.map(p=>{
+                const pa=getPreAuthNudge(p); const lb=getLabNudge(p); const noAppt=!p.nextAppt&&calculateStatus(p)==="F/U Appt Needed";
+                const tags=[lb&&lb.label, pa&&pa.label, noAppt&&"No appointment scheduled"].filter(Boolean);
+                return (
+                  <div key={p.id} onClick={()=>{ setDetailPatient(p.id); setShowPendingSheet(false); }} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 0",borderBottom:"1px solid #f3f0f7",cursor:"pointer" }}>
+                    <div style={{ width:36,height:36,borderRadius:11,background:lb?"#fee2e2":pa?"#dcfce7":"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                      <span style={{ fontSize:16 }}>{lb?"🧪":pa?"📋":"⏳"}</span>
                     </div>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontWeight:600,fontSize:14,color:"#1e1428" }}>{p.alias}</div>
+                      <div style={{ fontSize:12,color:NYU.gray400 }}>{tags.join(" · ")||"Pending review"}</div>
+                    </div>
+                    <span style={{ color:"#e5dff0",fontSize:16 }}>›</span>
                   </div>
-                  <span style={{ color:"#e5dff0",fontSize:16 }}>›</span>
-                </div>
-              ));
+                );
+              });
             })()}
           </div>
         </div>
@@ -3788,6 +3894,22 @@ RESPONSE RULES:
                     <button className="action-btn" onClick={()=>{ exportRoster(); }} style={{ flex:1,background:"white",color:NYU.gray700,border:`1.5px solid ${NYU.gray200}`,fontSize:13 }}>📥 Export CSV</button>
                   </div>
                 </div>
+                <div style={{ background:"white",borderRadius:14,padding:"16px 18px",border:`1px solid ${NYU.gray100}` }}>
+                  <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10 }}>Invite a Student</div>
+                  <div style={{ fontSize:12,color:NYU.gray500,marginBottom:12,lineHeight:1.5 }}>Share this link with classmates so they can create a ClinIQ account — paste it directly into a Gmail, iMessage, or group chat.</div>
+                  <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                    <div style={{ flex:1,background:NYU.gray50,borderRadius:10,padding:"10px 12px",fontSize:12,color:NYU.gray600,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",border:`1px solid ${NYU.gray100}` }}>
+                      https://clinic-iq.replit.app/?signup=1
+                    </div>
+                    <button className="action-btn" onClick={()=>{
+                      navigator.clipboard.writeText(`https://clinic-iq.replit.app/?signup=1`);
+                      setInviteCopied(true);
+                      setTimeout(()=>setInviteCopied(false),2500);
+                    }} style={{ background:inviteCopied?"#059669":T.purple,color:"white",fontSize:12,padding:"10px 16px",flexShrink:0,transition:"background 0.2s" }}>
+                      {inviteCopied?"✓ Copied!":"Copy link"}
+                    </button>
+                  </div>
+                </div>
                 <div style={{ background:`${T.purple}12`,borderRadius:14,padding:"16px 18px",border:`1px solid ${T.purple}30`,display:"flex",alignItems:"center",gap:14 }}>
                   <div style={{ fontSize:28,flexShrink:0 }}>🧭</div>
                   <div style={{ flex:1 }}>
@@ -3798,7 +3920,7 @@ RESPONSE RULES:
                   </div>
                 </div>
                 <div style={{ background:NYU.gray50,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-                  <div><div style={{ fontSize:13,fontWeight:600,color:NYU.gray900 }}>ClinIQ</div><div style={{ fontSize:11,color:NYU.gray400,marginTop:2 }}>NYU College of Dentistry · v1.1</div></div>
+                  <div><div style={{ fontSize:13,fontWeight:600,color:NYU.gray900 }}>ClinIQ</div><div style={{ fontSize:11,color:NYU.gray400,marginTop:2 }}>ClinIQ · v1.1</div></div>
                   <div style={{ width:36,height:36,borderRadius:10,background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`,display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ color:"white",fontSize:16,fontWeight:700 }}>C</span></div>
                 </div>
               </>)}
@@ -3974,12 +4096,12 @@ RESPONSE RULES:
       {/* ── GUIDED TOUR OVERLAY ── */}
       {tourStep!==null&&(()=>{
         const steps=[
-          { icon:"🏠", title:"Overview", body:"The Overview tab is your daily command center — greeting, today's appointments, stat chips, nudges, and behavioral insights all in one scroll." },
+          { icon:"🏠", title:"Overview", body:"The Overview tab is your daily command center: greeting, today's appointments, stat chips, nudges, and behavioral insights all in one scroll." },
           { icon:"👥", title:"Directory", body:"The Directory tab stores your attendings, partners, and specialists. Tap any card to edit their info, or tap + Add Provider to create a new entry." },
           { icon:"⭐", title:"Goals", body:"Goals shows your graduation requirement progress grouped by status. Green = done, amber = in progress. Tap a discipline to go to patients in that specialty." },
           { icon:"📅", title:"Calendar", body:"Calendar shows upcoming appointments and external rotations in a monthly view. Tap any day to see or schedule appointments." },
-          { icon:"🔢", title:"Stat chips", body:"The three chips at the top of Overview are tappable — Today's Patients scrolls down to your schedule, Pending opens a priority list, and Req. Left jumps to Goals." },
-          { icon:"💬", title:"AI Assistant", body:"Tap the AI button (bottom-right) to open the AI assistant. Ask anything — it knows your entire caseload, requirements, and NYUCD clinical protocols." },
+          { icon:"🔢", title:"Stat chips", body:"The three chips at the top of Overview are tappable: Today's Patients scrolls down to your schedule, Pending opens a priority list, and Requirements jumps to Goals." },
+          { icon:"💬", title:"AI Assistant", body:"Tap the AI button (bottom-right) to open the AI assistant. Ask anything: it knows your entire caseload, requirements, and clinical protocols." },
           { icon:"📓", title:"Notebook & Roster", body:"Access your clinical notebook and full patient roster from the hamburger menu (top-left). Use the roster search to filter by alias, chart number, or procedure." },
           { icon:"🎓", title:"You're all set!", body:"ClinIQ is built to grow with your caseload. Add patients, log visits, and let AI help you stay on track for graduation. Good luck!" },
         ];

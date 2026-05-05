@@ -5,8 +5,9 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"node server.js\" \"vite\"",
+    "dev": "NODE_ENV=development node server.js",
     "build": "vite build",
+    "start": "node server.js",
     "preview": "vite preview",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

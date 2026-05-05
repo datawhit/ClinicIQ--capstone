@@ -68,15 +68,19 @@ app.post('/api/auth/login', async (req, res) => {
     let user = result.rows[0];
     if (!user) {
       // auto-register on first login
-      const hash = await bcrypt.hash(password || 'testing-placeholder', 10);
+      if (!password) return res.status(400).json({ error: 'Password required to create an account' });
+      const hash = await bcrypt.hash(password, 10);
       const ins = await pool.query(
         'INSERT INTO users (name, email, password_hash, year) VALUES ($1,$2,$3,$4) RETURNING id, name, email, year',
         [name || email.split('@')[0], email.toLowerCase(), hash, year || 'D3']
       );
       user = ins.rows[0];
       await pool.query('INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [user.id]);
+    } else {
+      // verify password for existing accounts
+      const valid = password && await bcrypt.compare(password, user.password_hash);
+      if (!valid) return res.status(401).json({ error: 'Incorrect password' });
     }
-    // NOTE: password verification bypassed for testing phase — re-enable before production
     req.session.userId = user.id;
     req.session.userName = user.name;
     req.session.userYear = user.year;
@@ -451,126 +455,133 @@ app.post('/api/demo/seed', requireAuth, async (req, res) => {
   const uid36 = () => `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substr(2,4).toUpperCase()}`;
 
   const demoPatients = [
+    // ── 1: Appointment TODAY (Apr 28) — healthy, no alerts ──────────────────
     {
       chartNumber:"1047823", procedure:"Root Canal - Molar", discipline:"Endodontics",
-      treatmentStart:"2026-01-15", expectedCompletion:"2026-04-15",
-      nextAppt:"2026-04-02", nextApptTime:"09:00", treatmentComplete:false,
+      treatmentStart:"2026-02-10", expectedCompletion:"2026-07-01",
+      nextAppt:"2026-04-28", nextApptTime:"09:00", treatmentComplete:false,
       labStatus:"None", labSentDate:"", labReceivedDate:"",
-      preAuth:"Approved", preAuthSubmittedDate:"2026-01-20",
-      notes:"Patient tolerated well. Final restoration pending. Prefers morning appointments.",
+      preAuth:"Approved", preAuthSubmittedDate:"2026-02-15",
+      notes:"Obturation complete last visit. Crown prep scheduled for today. Patient tolerated treatment well.",
       isPrimaryProvider:true, patientLanguage:"English",
       handoffPartner:"Marcus Reid", handoffPartnerYear:"D3",
-      handoffNotes:"Crown placement still pending. Patient prefers morning appointments.",
+      handoffNotes:"Crown prep today. Patient prefers morning appointments.",
       visits:[
-        { date:"2026-01-15", procedure:"Initial Exam", notes:"Treatment plan accepted." },
-        { date:"2026-02-10", procedure:"Root Canal - Molar", notes:"First appointment, access opened." },
-        { date:"2026-03-20", procedure:"Root Canal - Molar", notes:"Obturation complete. Sent for crown prep." }
+        { date:"2026-02-10", procedure:"Initial Exam", notes:"Treatment plan accepted." },
+        { date:"2026-03-05", procedure:"Root Canal - Molar", notes:"Access opened, canals shaped." },
+        { date:"2026-04-08", procedure:"Root Canal - Molar", notes:"Obturation complete. Scheduling crown." }
       ]
     },
+    // ── 2: Appointment TOMORROW (Apr 29) — healthy, no alerts ───────────────
     {
-      chartNumber:"1047824", procedure:"Crown Delivery", discipline:"Prosthodontics",
-      treatmentStart:"2026-01-15", expectedCompletion:"2026-04-01",
-      nextAppt:null, nextApptTime:"", treatmentComplete:false,
-      labStatus:"Received", labSentDate:"2026-02-20", labReceivedDate:"2026-03-15",
-      preAuth:"Submitted", preAuthSubmittedDate:"2026-02-01",
-      notes:"Lab received. Need to schedule delivery appointment urgently.",
+      chartNumber:"1047824", procedure:"Comprehensive Oral Evaluation", discipline:"Comprehensive Care",
+      treatmentStart:"2026-03-12", expectedCompletion:"2026-08-01",
+      nextAppt:"2026-04-29", nextApptTime:"10:30", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Not Submitted", preAuthSubmittedDate:"",
+      notes:"Initial comprehensive eval complete. Treatment plan includes perio consult and two restorations.",
       isPrimaryProvider:true, patientLanguage:"Spanish",
       handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
       visits:[
-        { date:"2026-01-15", procedure:"Crown Prep", notes:"Prep complete, impressions taken." },
-        { date:"2026-03-18", procedure:"Try-in", notes:"Crown fits well, minor adjustment needed." }
+        { date:"2026-03-12", procedure:"Comprehensive Oral Evaluation", notes:"Full exam, radiographs taken. Treatment plan presented." },
+        { date:"2026-04-10", procedure:"Prophylaxis", notes:"Prophy and fluoride. Patient education on flossing technique." }
       ]
     },
+    // ── 3: Lab nudge (sent 16 days ago — overdue) ────────────────────────────
     {
-      chartNumber:"1047825", procedure:"Implant Stage 2", discipline:"Implant Dentistry",
-      treatmentStart:"2025-11-20", expectedCompletion:"2026-06-01",
-      nextAppt:"2026-04-05", nextApptTime:"10:30", treatmentComplete:false,
-      labStatus:"Sent", labSentDate:"2026-03-10", labReceivedDate:"",
-      preAuth:"Approved", preAuthSubmittedDate:"2025-12-10",
-      notes:"Stage 1 osseointegration confirmed. Abutment placement scheduled.",
-      isPrimaryProvider:true, patientLanguage:"Mandarin",
-      handoffPartner:"Priya Patel", handoffPartnerYear:"D3",
-      handoffNotes:"Osseointegration confirmed. Next stage April 5.",
-      visits:[
-        { date:"2025-11-20", procedure:"Implant Placement", notes:"Stage 1 placed, healing abutment placed." },
-        { date:"2026-01-15", procedure:"Osseointegration Check", notes:"Good bone contact, proceeding to stage 2." },
-        { date:"2026-03-10", procedure:"Abutment Impression", notes:"Sent to lab for custom abutment." }
-      ]
-    },
-    {
-      chartNumber:"1047826", procedure:"Scaling & Root Planing", discipline:"Periodontics",
-      treatmentStart:"2026-02-01", expectedCompletion:"2026-05-01",
-      nextAppt:null, nextApptTime:"", treatmentComplete:false,
-      labStatus:"None", labSentDate:"", labReceivedDate:"",
-      preAuth:"Denied", preAuthSubmittedDate:"2026-01-25",
-      notes:"Pre-auth denied. Need to resubmit with additional documentation from attending.",
-      isPrimaryProvider:true, patientLanguage:"Haitian Creole",
-      handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
-      visits:[
-        { date:"2026-02-01", procedure:"Perio Exam", notes:"Full mouth probing complete. SRP treatment plan accepted." },
-        { date:"2026-03-05", procedure:"SRP - Upper Right", notes:"Quadrant 1 complete. Patient tolerated well." }
-      ]
-    },
-    {
-      chartNumber:"1047827", procedure:"Extraction - Impacted", discipline:"Oral & Maxillofacial Surgery",
-      treatmentStart:"2026-03-01", expectedCompletion:"2026-04-15",
-      nextAppt:"2026-04-01", nextApptTime:"14:00", treatmentComplete:false,
-      labStatus:"None", labSentDate:"", labReceivedDate:"",
-      preAuth:"Approved", preAuthSubmittedDate:"2026-02-15",
-      notes:"Post-op healing well. Suture removal today.",
-      isPrimaryProvider:true, patientLanguage:"English",
-      handoffPartner:"Jordan Kim", handoffPartnerYear:"D3",
-      handoffNotes:"Suture removal April 1. Good case for D3 observation.",
-      visits:[
-        { date:"2026-03-01", procedure:"Consultation", notes:"CBCT reviewed with attending. Extraction approved." },
-        { date:"2026-03-15", procedure:"Extraction - Impacted Molar", notes:"Procedure complete. Sutures placed." },
-        { date:"2026-03-22", procedure:"Post-op Check", notes:"Healing well, mild swelling resolving." }
-      ]
-    },
-    {
-      chartNumber:"1047828", procedure:"Complete Denture", discipline:"Prosthodontics",
-      treatmentStart:"2026-01-20", expectedCompletion:"2026-05-15",
-      nextAppt:"2026-04-02", nextApptTime:"09:30", treatmentComplete:false,
-      labStatus:"Sent", labSentDate:"2026-03-12", labReceivedDate:"",
+      chartNumber:"1047825", procedure:"Complete Denture", discipline:"Prosthodontics",
+      treatmentStart:"2026-01-20", expectedCompletion:"2026-07-15",
+      nextAppt:"2026-05-06", nextApptTime:"09:30", treatmentComplete:false,
+      labStatus:"Sent", labSentDate:"2026-04-12", labReceivedDate:"",
       preAuth:"Approved", preAuthSubmittedDate:"2026-01-25",
-      notes:"Final impression sent to lab. Wax try-in appointment scheduled.",
+      notes:"Final impression sent to lab Apr 12. Wax try-in scheduled May 6. Call lab if no update by Apr 29.",
       isPrimaryProvider:true, patientLanguage:"Russian",
       handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
       visits:[
         { date:"2026-01-20", procedure:"Preliminary Impression", notes:"Initial records taken." },
-        { date:"2026-02-10", procedure:"Final Impression", notes:"Border molded, final impression complete." },
-        { date:"2026-03-12", procedure:"Jaw Relations", notes:"VDO established. Sent to lab for wax try-in." }
+        { date:"2026-02-18", procedure:"Final Impression", notes:"Border molded, final impression complete." },
+        { date:"2026-04-12", procedure:"Jaw Relations", notes:"VDO established. Sent to lab for wax try-in." }
       ]
     },
+    // ── 4: Pre-auth nudge (submitted 24 days ago — check status) ─────────────
+    {
+      chartNumber:"1047826", procedure:"Implant Stage 2", discipline:"Implant Dentistry",
+      treatmentStart:"2025-11-20", expectedCompletion:"2026-08-01",
+      nextAppt:"2026-05-10", nextApptTime:"11:00", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Submitted", preAuthSubmittedDate:"2026-04-04",
+      notes:"Stage 1 osseointegration confirmed. Pre-auth submitted Apr 4 for stage 2 abutment. Appointment scheduled May 10.",
+      isPrimaryProvider:true, patientLanguage:"Mandarin",
+      handoffPartner:"Priya Patel", handoffPartnerYear:"D3",
+      handoffNotes:"Osseointegration confirmed. Stage 2 pending pre-auth approval.",
+      visits:[
+        { date:"2025-11-20", procedure:"Implant Placement", notes:"Stage 1 placed, healing abutment placed." },
+        { date:"2026-01-22", procedure:"Osseointegration Check", notes:"Good bone contact, proceeding to stage 2." },
+        { date:"2026-04-04", procedure:"Pre-Prosthetic Records", notes:"Submitted pre-auth for abutment and crown." }
+      ]
+    },
+    // ── 5: High urgency — no appt scheduled, not seen in 72 days ─────────────
+    {
+      chartNumber:"1047827", procedure:"Scaling & Root Planing", discipline:"Periodontics",
+      treatmentStart:"2026-01-08", expectedCompletion:"2026-05-10",
+      nextAppt:null, nextApptTime:"", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Approved", preAuthSubmittedDate:"2026-01-10",
+      notes:"SRP started in January. Patient missed March appointment. Need to reschedule quadrant 2-4 urgently.",
+      isPrimaryProvider:true, patientLanguage:"Haitian Creole",
+      handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+      visits:[
+        { date:"2026-01-08", procedure:"Perio Exam", notes:"Full mouth probing. SRP plan accepted." },
+        { date:"2026-02-14", procedure:"SRP - Quadrant 1", notes:"Mandibular right complete. Patient tolerated well." }
+      ]
+    },
+    // ── 6: High urgency — pre-auth denied + no follow-up ─────────────────────
+    {
+      chartNumber:"1047828", procedure:"Extraction - Impacted Molar", discipline:"Oral & Maxillofacial Surgery",
+      treatmentStart:"2026-03-01", expectedCompletion:"2026-05-20",
+      nextAppt:null, nextApptTime:"", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Denied", preAuthSubmittedDate:"2026-03-05",
+      notes:"Pre-auth denied — insurance requires additional CBCT and narrative. Need to resubmit with Dr. Webb documentation.",
+      isPrimaryProvider:true, patientLanguage:"English",
+      handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+      visits:[
+        { date:"2026-03-01", procedure:"Consultation", notes:"CBCT reviewed. Extraction plan presented." },
+        { date:"2026-03-20", procedure:"Pre-op Records", notes:"Pre-auth submitted. Awaiting insurance decision." }
+      ]
+    },
+    // ── 7: Active & healthy — upcoming appt, no alerts ───────────────────────
     {
       chartNumber:"1047829", procedure:"Composite Restoration", discipline:"General Dentistry",
-      treatmentStart:"2026-03-25", expectedCompletion:"2026-04-10",
-      nextAppt:"2026-04-10", nextApptTime:"11:00", treatmentComplete:false,
+      treatmentStart:"2026-04-01", expectedCompletion:"2026-07-20",
+      nextAppt:"2026-05-14", nextApptTime:"14:00", treatmentComplete:false,
       labStatus:"None", labSentDate:"", labReceivedDate:"",
       preAuth:"Not Submitted", preAuthSubmittedDate:"",
-      notes:"Multiple composite restorations planned. First quadrant complete.",
+      notes:"First quadrant composites complete. Three more quadrants planned. Patient very compliant.",
       isPrimaryProvider:true, patientLanguage:"English",
       handoffPartner:"Marcus Reid", handoffPartnerYear:"D3",
-      handoffNotes:"Simple composites — good learning case for D3.",
+      handoffNotes:"Simple composites - good observation case for D3.",
       visits:[
-        { date:"2026-03-25", procedure:"Composite - 3 surfaces", notes:"Upper right quadrant complete. Patient happy with result." }
+        { date:"2026-04-01", procedure:"Composite - 2 surfaces", notes:"Upper right quadrant, teeth #2 and #4." },
+        { date:"2026-04-20", procedure:"Composite - 3 surfaces", notes:"Lower right quadrant complete. Excellent cooperation." }
       ]
     },
+    // ── 8: Active & healthy — supporting provider role, no alerts ─────────────
     {
-      chartNumber:"1047830", procedure:"Orthodontic Retention", discipline:"Orthodontics",
-      treatmentStart:"2025-09-01", expectedCompletion:"2026-05-01",
-      nextAppt:"2026-04-01", nextApptTime:"15:00", treatmentComplete:false,
+      chartNumber:"1047830", procedure:"Orthodontic Adjustment", discipline:"Orthodontics",
+      treatmentStart:"2025-09-01", expectedCompletion:"2026-10-01",
+      nextAppt:"2026-05-18", nextApptTime:"15:00", treatmentComplete:false,
       labStatus:"None", labSentDate:"", labReceivedDate:"",
       preAuth:"Not Submitted", preAuthSubmittedDate:"",
-      notes:"Retention phase. Monthly monitoring appointments ongoing.",
+      notes:"Retention phase ongoing. Monthly monitoring going well. Patient wearing retainers consistently.",
       isPrimaryProvider:false, patientLanguage:"English",
       handoffPartner:"Dr. Chen", handoffPartnerYear:"D4",
-      handoffNotes:"Monthly monitoring. Almost ready for debond.",
+      handoffNotes:"Monthly monitoring. Progressing well toward debond.",
       visits:[
         { date:"2025-09-01", procedure:"Banding", notes:"Full banding complete." },
         { date:"2025-11-15", procedure:"Adjustment", notes:"Wire change, good progress." },
         { date:"2026-01-20", procedure:"Adjustment", notes:"Spaces closing well." },
-        { date:"2026-02-28", procedure:"Adjustment", notes:"Almost ready for debond." }
+        { date:"2026-04-15", procedure:"Adjustment", notes:"Nearly ready for debond. Excellent compliance." }
       ]
     }
   ];
@@ -825,13 +836,6 @@ app.post('/api/parse', async (req, res) => {
   }
 });
 
-// ── Static / SPA ──────────────────────────────────────────────────────────────
-
-app.use(express.static(path.join(__dirname, 'dist')));
-app.get('/{*path}', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
-
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 initDb().then(async () => {
@@ -842,17 +846,36 @@ initDb().then(async () => {
       const hash = await bcrypt.hash('demo', 10);
       const ins = await pool.query(
         "INSERT INTO users (name,email,password_hash,year) VALUES ($1,$2,$3,$4) RETURNING id",
-        ['Demo Student', 'demo@cliniq.app', hash, 'D4']
+        ['Jordan Rivera', 'demo@cliniq.app', hash, 'D4']
       );
       await pool.query('INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [ins.rows[0].id]);
       console.log('Demo user created');
+    } else {
+      await pool.query("UPDATE users SET name='Jordan Rivera', year='D4' WHERE email='demo@cliniq.app'");
     }
   } catch (err) {
     console.error('Demo user init error:', err.message);
   }
-  app.listen(3001, '0.0.0.0', () => {
-    console.log('ClinIQ API server running on port 3001');
-  });
+
+  const PORT = process.env.PORT || 5000;
+
+  if (process.env.NODE_ENV === 'development') {
+    // Dev mode: mount Vite middleware so everything runs on one port
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    // Production: serve the built frontend
+    app.use(express.static(path.join(__dirname, 'dist')));
+    app.get('/{*path}', (req, res) => {
+      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 }).catch(err => {
   console.error('Failed to initialize database:', err.message);
   process.exit(1);
