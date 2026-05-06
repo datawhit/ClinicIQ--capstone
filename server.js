@@ -583,6 +583,67 @@ app.post('/api/demo/seed', requireAuth, async (req, res) => {
         { date:"2026-01-20", procedure:"Adjustment", notes:"Spaces closing well." },
         { date:"2026-04-15", procedure:"Adjustment", notes:"Nearly ready for debond. Excellent compliance." }
       ]
+    },
+    // ── 9: Pediatric Dentistry — quadrant sealants in progress ─────────────
+    {
+      chartNumber:"1047831", procedure:"Sealants - Quadrant", discipline:"Pediatric Dentistry",
+      treatmentStart:"2026-03-15", expectedCompletion:"2026-06-15",
+      nextAppt:"2026-05-19", nextApptTime:"10:00", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Approved", preAuthSubmittedDate:"2026-03-20",
+      notes:"Pediatric patient (age 8). Sealants quadrant 1 complete. Quadrant 2 scheduled. Parent wants to combine with hygiene visit if possible.",
+      isPrimaryProvider:true, patientLanguage:"Spanish",
+      handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+      visits:[
+        { date:"2026-03-15", procedure:"New Patient Exam", notes:"Comprehensive ped exam, radiographs. Treatment plan presented to parent." },
+        { date:"2026-04-12", procedure:"Sealants - Quadrant 1", notes:"Upper right molars. Patient cooperative. Used N2O." }
+      ]
+    },
+    // ── 10: Dental Hygiene — perio maintenance recall ────────────────────────
+    {
+      chartNumber:"1047832", procedure:"Periodontal Maintenance", discipline:"Dental Hygiene",
+      treatmentStart:"2025-08-10", expectedCompletion:"2026-08-10",
+      nextAppt:"2026-05-20", nextApptTime:"13:00", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Not Submitted", preAuthSubmittedDate:"",
+      notes:"3-month perio maintenance recall. Previous SRP completed. Stable but needs ongoing maintenance and home care reinforcement.",
+      isPrimaryProvider:true, patientLanguage:"English",
+      handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+      visits:[
+        { date:"2025-08-10", procedure:"SRP - Full Mouth", notes:"Initial SRP completed across all 4 quadrants." },
+        { date:"2025-11-15", procedure:"Perio Maintenance", notes:"3-month follow-up. Pocket reduction confirmed." },
+        { date:"2026-02-15", procedure:"Perio Maintenance", notes:"Continued stability. Reinforced flossing technique." }
+      ]
+    },
+    // ── 11: Special Needs Dentistry — adult, sedation case pending ───────────
+    {
+      chartNumber:"1047833", procedure:"Comprehensive Exam - Sedation", discipline:"Special Needs Dentistry",
+      treatmentStart:"2026-04-05", expectedCompletion:"2026-09-30",
+      nextAppt:null, nextApptTime:"", treatmentComplete:false,
+      labStatus:"None", labSentDate:"", labReceivedDate:"",
+      preAuth:"Submitted", preAuthSubmittedDate:"2026-04-15",
+      notes:"Adult patient with developmental disability. Caregiver-assisted. Pre-auth submitted for IV sedation for restorations. Awaiting approval to schedule.",
+      isPrimaryProvider:true, patientLanguage:"English",
+      handoffPartner:"", handoffPartnerYear:"D3", handoffNotes:"",
+      visits:[
+        { date:"2026-04-05", procedure:"Initial Consultation", notes:"Brief exam with caregiver. Multiple restorations needed. Sedation required for treatment." }
+      ]
+    },
+    // ── 12: Oral Medicine & Pathology — biopsy follow-up pending ─────────────
+    {
+      chartNumber:"1047834", procedure:"Biopsy Follow-up", discipline:"Oral Medicine & Pathology",
+      treatmentStart:"2026-04-02", expectedCompletion:"2026-05-15",
+      nextAppt:"2026-05-12", nextApptTime:"11:30", treatmentComplete:false,
+      labStatus:"Sent", labSentDate:"2026-04-22", labReceivedDate:"",
+      preAuth:"Approved", preAuthSubmittedDate:"2026-04-02",
+      notes:"Buccal mucosa lesion biopsied 4/22. Awaiting pathology report. Patient anxious about results — schedule consult once report received.",
+      isPrimaryProvider:true, patientLanguage:"English",
+      handoffPartner:"Marcus Reid", handoffPartnerYear:"D3",
+      handoffNotes:"Patient very anxious. Take time to explain results clearly when they arrive.",
+      visits:[
+        { date:"2026-04-02", procedure:"Initial Evaluation", notes:"Lesion noted on left buccal mucosa, 1cm white patch. Biopsy recommended." },
+        { date:"2026-04-22", procedure:"Excisional Biopsy", notes:"Biopsy completed, sent to oral pathology lab. Sutures placed." }
+      ]
     }
   ];
 
