@@ -708,6 +708,18 @@ const css = `
   .page-inner { padding: 24px 32px 80px; }
   .bottom-nav { display: flex; }
   .float-ai-btn { bottom: 72px; right: 24px; }
+  .desktop-sidebar { display: none; }
+  .main-with-sidebar { margin-left: 0; }
+
+  @media (min-width: 769px) {
+    .desktop-sidebar { display: flex !important; }
+    .bottom-nav { display: none !important; }
+    .hamburger-mobile-only { display: none !important; }
+    .top-bar-logo-mobile-only { display: none !important; }
+    .main-with-sidebar { margin-left: 220px; }
+    .page-inner { padding-bottom: 24px !important; }
+    .float-ai-btn { bottom: 24px !important; }
+  }
 
   @media (max-width: 768px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
@@ -1278,16 +1290,18 @@ RESPONSE RULES:
       const data = await res.json();
       if (!res.ok) { setLoginError(data.error||"Demo login failed"); setLoginLoading(false); return; }
       setUser(data.user);
-      const pData = await loadUserData();
-      if (Array.isArray(pData) && pData.length === 0) {
-        const seedRes = await fetch("/api/demo/seed", { method:"POST" });
-        if (seedRes.ok) {
-          const seedData = await seedRes.json();
-          setPatients(seedData.patients||[]);
-          setRotations(seedData.rotations||[]);
-          setNotes(seedData.notes||[]);
-          if (seedData.providers) setProviders(seedData.providers);
-        }
+      await loadUserData();
+      const seedRes = await fetch("/api/demo/seed", { method:"POST" });
+      if (seedRes.ok) {
+        const seedData = await seedRes.json();
+        setPatients(seedData.patients||[]);
+        setRotations(seedData.rotations||[]);
+        setNotes(seedData.notes||[]);
+        if (seedData.providers) setProviders(seedData.providers);
+        localStorage.removeItem("cliniq-tour-complete");
+        setTourStep(1);
+      } else {
+        console.error("Demo seed failed", seedRes.status);
       }
     } catch { setLoginError("Connection error. Please try again."); }
     setLoginLoading(false);
@@ -1530,13 +1544,13 @@ RESPONSE RULES:
   return (
     <>
       <style>{css}</style><style>{themeVars}</style>
-      <div style={{ minHeight:"100vh", background:"#f8f6fb" }}>
+      <div className="main-with-sidebar" style={{ minHeight:"100vh", background:"#f8f6fb" }}>
 
         {/* Top Header */}
         <div style={{ background:"white", borderBottom:`1px solid ${NYU.gray100}`, position:"sticky", top:0, zIndex:100 }}>
           <div className="top-bar" style={{ maxWidth:1100, margin:"0 auto", padding:"0 20px", display:"flex", alignItems:"center", justifyContent:"space-between", height:56 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, position:"relative" }}>
-              <button onClick={()=>setMenuOpen(!menuOpen)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px 8px", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}
+              <button className="hamburger-mobile-only" onClick={()=>setMenuOpen(!menuOpen)} style={{ background:"none", border:"none", cursor:"pointer", padding:"6px 8px", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}
                 onMouseEnter={e=>e.currentTarget.style.background=NYU.gray100} onMouseLeave={e=>e.currentTarget.style.background="none"}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                   <rect x="3" y="5" width="14" height="1.5" rx="0.75" fill={NYU.gray600}/>
@@ -1544,55 +1558,76 @@ RESPONSE RULES:
                   <rect x="3" y="13.5" width="14" height="1.5" rx="0.75" fill={NYU.gray600}/>
                 </svg>
               </button>
-              <button onClick={()=>{ setTab("overview"); setShowRosterPanel(false); setShowSettings(false); setMenuOpen(false); setDetailPatient(null); }} style={{ background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:8,padding:0 }}>
+              <button className="top-bar-logo-mobile-only" onClick={()=>{ setTab("overview"); setShowRosterPanel(false); setShowSettings(false); setMenuOpen(false); setDetailPatient(null); }} style={{ background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:8,padding:0 }}>
                 <div style={{ width:30, height:30, borderRadius:10, background:`linear-gradient(135deg, ${T.purple}, ${T.accent})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
                   <span style={{ color:"white", fontSize:14, fontWeight:700 }}>C</span>
                 </div>
                 <span style={{ color:NYU.gray900, fontSize:16, fontWeight:700, fontFamily:"'Fraunces', serif", letterSpacing:"-0.02em" }}>ClinIQ</span>
               </button>
 
-              {menuOpen && (
-                <>
-                  <div onClick={()=>setMenuOpen(false)} style={{ position:"fixed", inset:0, zIndex:199 }}/>
-                  <div style={{ position:"absolute", top:44, left:0, background:"white", borderRadius:14, boxShadow:"0 8px 32px rgba(87,6,140,0.15)", border:`1px solid ${NYU.gray100}`, width:220, padding:"6px 0", zIndex:200, animation:"slideUp 0.15s ease" }}>
-                    {[
-                      { label:"Paired Provider View", icon:"🤝", action:()=>{ setShowPairedPanel(true); setMenuOpen(false); } },
-                      { label:"Urgent Patients", icon:"⚠️", action:()=>{ setTab("roster"); setFilter("Urgent"); setMenuOpen(false); setShowUrgentPanel(true); } },
-                    ].map((item,i)=>(
-                      <button key={i} onClick={item.action} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.gray900, fontFamily:"'Inter', sans-serif", textAlign:"left" }}
-                        onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                        <span style={{ fontSize:15 }}>{item.icon}</span>{item.label}
-                      </button>
-                    ))}
-                    <div style={{ height:1, background:NYU.gray100, margin:"4px 12px" }}/>
-                    {[
-                      { label:"Add Patient", icon:"➕", action:()=>{ setShowAddModal(true); setMenuOpen(false); } },
-                      { label:"Import Roster", icon:"📂", action:()=>{ setShowImportModal(true); setImportStep(1); setMenuOpen(false); } },
-                      { label:"Export Roster", icon:"📥", action:()=>{ exportRoster(); setMenuOpen(false); } },
-                    ].map((item,i)=>(
-                      <button key={i} onClick={item.action} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.gray900, fontFamily:"'Inter', sans-serif", textAlign:"left" }}
-                        onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                        <span style={{ fontSize:15 }}>{item.icon}</span>{item.label}
-                      </button>
-                    ))}
-                    <div style={{ height:1, background:NYU.gray100, margin:"4px 12px" }}/>
-                    {[
-                      { label:"Notebook", icon:"📓", action:()=>{ setTab("notebook"); setMenuOpen(false); } },
-                      { label:"Settings", icon:"⚙️", action:()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setSettingsTab("profile"); setShowSettings(true); setMenuOpen(false); } },
-                    ].map((item,i)=>(
-                      <button key={i} onClick={item.action} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.gray900, fontFamily:"'Inter', sans-serif", textAlign:"left" }}
-                        onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                        <span style={{ fontSize:15 }}>{item.icon}</span>{item.label}
-                      </button>
-                    ))}
-                    <div style={{ height:1, background:NYU.gray100, margin:"4px 12px" }}/>
-                    <button onClick={()=>{ handleLogout(); setMenuOpen(false); }} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.red, fontFamily:"'Inter', sans-serif", textAlign:"left" }}
-                      onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                      <span style={{ fontSize:15 }}>🚪</span>Sign Out
-                    </button>
-                  </div>
-                </>
-              )}
+              {menuOpen && (()=> {
+  const Icon = ({ children }) => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}>
+      {children}
+    </svg>
+  );
+  const I = {
+    paired: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+    alert: <><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></>,
+    userPlus: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></>,
+    download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></>,
+    upload: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></>,
+    book: <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>,
+    settings: <><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></>,
+    logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></>,
+  };
+  const itemStyle = { width:"100%", display:"flex", alignItems:"center", gap:12, padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:500, color:NYU.gray900, fontFamily:"'Inter', sans-serif", textAlign:"left" };
+  const divider = { height:1, background:NYU.gray100, margin:"4px 12px" };
+  return (
+    <>
+      <div onClick={()=>setMenuOpen(false)} style={{ position:"fixed", inset:0, zIndex:199 }}/>
+      <div style={{ position:"absolute", top:44, left:0, background:"white", borderRadius:14, boxShadow:"0 8px 32px rgba(87,6,140,0.15)", border:`1px solid ${NYU.gray100}`, width:230, padding:"6px 0", zIndex:200, animation:"slideUp 0.15s ease" }}>
+        {[
+          { label:"Paired Provider View", icon:I.paired, action:()=>{ setShowPairedPanel(true); setMenuOpen(false); } },
+          { label:"Urgent Patients", icon:I.alert, action:()=>{ setTab("roster"); setFilter("Urgent"); setMenuOpen(false); setShowUrgentPanel(true); } },
+          { label:"Provider Directory", icon:<><circle cx="10" cy="8" r="4"/><path d="M18 21a8 8 0 0 0-16 0"/></>, action:()=>{ setTab("directory"); setMenuOpen(false); } },
+        ].map((item,i)=>(
+          <button key={i} onClick={item.action} style={itemStyle}
+            onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+            <Icon>{item.icon}</Icon>{item.label}
+          </button>
+        ))}
+        <div style={divider}/>
+        {[
+          { label:"Add Patient", icon:I.userPlus, action:()=>{ setShowAddModal(true); setMenuOpen(false); } },
+          { label:"Import Roster", icon:I.download, action:()=>{ setShowImportModal(true); setImportStep(1); setMenuOpen(false); } },
+          { label:"Export Roster", icon:I.upload, action:()=>{ exportRoster(); setMenuOpen(false); } },
+        ].map((item,i)=>(
+          <button key={i} onClick={item.action} style={itemStyle}
+            onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+            <Icon>{item.icon}</Icon>{item.label}
+          </button>
+        ))}
+        <div style={divider}/>
+        {[
+          { label:"Notebook", icon:I.book, action:()=>{ setTab("notebook"); setMenuOpen(false); } },
+          { label:"Settings", icon:I.settings, action:()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setSettingsTab("profile"); setShowSettings(true); setMenuOpen(false); } },
+        ].map((item,i)=>(
+          <button key={i} onClick={item.action} style={itemStyle}
+            onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+            <Icon>{item.icon}</Icon>{item.label}
+          </button>
+        ))}
+        <div style={divider}/>
+        <button onClick={()=>{ handleLogout(); setMenuOpen(false); }} style={{ ...itemStyle, color:NYU.red }}
+          onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+          <Icon>{I.logout}</Icon>Sign Out
+        </button>
+      </div>
+    </>
+  );
+})()}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <button onClick={()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setSettingsTab("profile"); setShowSettings(true); }}
@@ -1602,6 +1637,102 @@ RESPONSE RULES:
             </div>
           </div>
         </div>
+
+        {/* ── DESKTOP SIDEBAR ── */}
+        {(()=>{
+          const navItems = [
+            { key:"overview", label:"Overview", icon:<svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="3" y="5" width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="9.25" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="13.5" width="7" height="1.5" rx="0.75" fill="currentColor"/></svg> },
+            { key:"roster",   label:"Patients", icon:<svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="6.5" r="3" stroke="currentColor" strokeWidth="1.4"/><path d="M3.5 17c0-3.5 2.5-6 6.5-6s6.5 2.5 6.5 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg> },
+            { key:"goals",    label:"Goals",    icon:<svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 3l1.8 3.6L16 7.3l-3 2.9.7 4.1L10 12.1 6.3 14.3l.7-4.1-3-2.9 4.2-.7L10 3z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg> },
+            { key:"calendar", label:"Calendar", icon:<svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M3 8h14" stroke="currentColor" strokeWidth="1.4"/><path d="M7 2v3M13 2v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg> },
+          ];
+          const notifCount = patients.filter(p=>p.manualUrgent||getPreAuthNudge(p)||getLabNudge(p)).length;
+          const sNavBtn = (active) => ({
+            display:"flex", alignItems:"center", gap:10, padding:"9px 16px", margin:"1px 8px",
+            borderRadius:10, border:"none", width:"calc(100% - 16px)", textAlign:"left",
+            background: active ? T.lavender : "none",
+            color: active ? T.purple : NYU.gray600,
+            cursor:"pointer", fontFamily:"'Inter',sans-serif", fontSize:13,
+            fontWeight: active ? 600 : 500, transition:"all 0.15s",
+          });
+          const sActBtn = {
+            display:"flex", alignItems:"center", gap:10, padding:"8px 16px", margin:"1px 8px",
+            borderRadius:10, border:"none", width:"calc(100% - 16px)", textAlign:"left",
+            background:"none", color:NYU.gray600, cursor:"pointer",
+            fontFamily:"'Inter',sans-serif", fontSize:13, fontWeight:500, transition:"all 0.15s",
+          };
+          return (
+            <div className="desktop-sidebar" style={{
+              position:"fixed", top:0, left:0, bottom:0, width:220,
+              background:"white", borderRight:`1px solid ${NYU.gray100}`,
+              flexDirection:"column", zIndex:90, padding:"0 0 16px", overflowY:"auto",
+            }}>
+              {/* Branding */}
+              <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${NYU.gray100}`, flexShrink:0 }}>
+                <button onClick={()=>{ setTab("overview"); setShowRosterPanel(false); setShowSettings(false); setDetailPatient(null); }}
+                  style={{ background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:8, padding:0 }}>
+                  <div style={{ width:28, height:28, borderRadius:9, background:`linear-gradient(135deg,${T.purple},${T.accent})`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <span style={{ color:"white", fontSize:13, fontWeight:700 }}>C</span>
+                  </div>
+                  <span style={{ color:NYU.gray900, fontSize:16, fontWeight:700, fontFamily:"'Fraunces',serif", letterSpacing:"-0.02em" }}>ClinIQ</span>
+                </button>
+              </div>
+              {/* Primary nav */}
+              <div style={{ paddingTop:8, flexShrink:0 }}>
+                {navItems.map(t=>{
+                  const active = tab===t.key;
+                  return (
+                    <button key={t.key} onClick={()=>setTab(t.key)} style={sNavBtn(active)}
+                      onMouseEnter={e=>{ if(!active) e.currentTarget.style.background=NYU.gray50; }}
+                      onMouseLeave={e=>{ if(!active) e.currentTarget.style.background="none"; }}>
+                      {t.icon}<span>{t.label}</span>
+                    </button>
+                  );
+                })}
+                {/* Alerts */}
+                {(()=>{
+                  const active = showNotifDrawer;
+                  return (
+                    <button onClick={()=>setShowNotifDrawer(v=>!v)} style={{ ...sNavBtn(active), position:"relative" }}
+                      onMouseEnter={e=>{ if(!active) e.currentTarget.style.background=NYU.gray50; }}
+                      onMouseLeave={e=>{ if(!active) e.currentTarget.style.background="none"; }}>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 2.5a6 6 0 0 1 6 6v3.5l1.5 1.5v1H2.5v-1L4 12V8.5a6 6 0 0 1 6-6z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/><path d="M8 16.5a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                      <span>Alerts</span>
+                      {notifCount>0&&<span style={{ marginLeft:"auto", background:"#ef4444", color:"white", borderRadius:99, fontSize:9, fontWeight:700, minWidth:16, height:16, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{notifCount}</span>}
+                    </button>
+                  );
+                })()}
+              </div>
+              <div style={{ height:1, background:NYU.gray100, margin:"8px 16px", flexShrink:0 }}/>
+              {/* Secondary actions */}
+              <div style={{ flexShrink:0 }}>
+                {[
+                  { label:"Provider Directory", action:()=>setTab("directory") },
+                  { label:"Paired Provider View", action:()=>setShowPairedPanel(true) },
+                  { label:"Urgent Patients", action:()=>{ setTab("roster"); setFilter("Urgent"); setShowUrgentPanel(true); } },
+                  { label:"Add Patient", action:()=>setShowAddModal(true) },
+                  { label:"Import Roster", action:()=>{ setShowImportModal(true); setImportStep(1); } },
+                  { label:"Export Roster", action:()=>exportRoster() },
+                  { label:"Notebook", action:()=>setTab("notebook") },
+                  { label:"Settings", action:()=>{ setSettingsDraft({ year:user.year, graduationDate:graduationDateStr, name:user.name, clinicSchedule:JSON.parse(JSON.stringify(clinicSchedule)) }); setSettingsTab("profile"); setShowSettings(true); } },
+                ].map((item,i)=>(
+                  <button key={i} onClick={item.action} style={sActBtn}
+                    onMouseEnter={e=>e.currentTarget.style.background=NYU.gray50}
+                    onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ flex:1 }}/>
+              <div style={{ height:1, background:NYU.gray100, margin:"8px 16px", flexShrink:0 }}/>
+              <button onClick={handleLogout} style={{ ...sActBtn, color:NYU.red }}
+                onMouseEnter={e=>e.currentTarget.style.background=NYU.redLight}
+                onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                Sign Out
+              </button>
+            </div>
+          );
+        })()}
 
         <div className="page-inner" style={{ maxWidth:1100, margin:"0 auto" }}>
 
@@ -1624,20 +1755,42 @@ RESPONSE RULES:
             return (
               <div style={{ padding:"20px 16px" }}>
                 <div style={{ fontFamily:"'Fraunces', serif", fontSize:24, fontWeight:700, color:"#1e1428", marginBottom:3, lineHeight:1.2 }}>{greeting}, {user?.name?.split(" ")[0]}.</div>
-                <div style={{ fontSize:13, color:"#a89cbd", marginBottom:20 }}>{new Date().toLocaleDateString("en-US",{ weekday:"long", month:"long", day:"numeric" })} · {patients.length} patient{patients.length!==1?"s":""}</div>
-                <div style={{ display:"flex", gap:10, marginBottom:20 }}>
-                  {[
-                    {label:"Today's patients",value:todayPts.length,bg:"#EEEDFE",color:"#3C3489",onClick:()=>{ if(todayPts.length===0){ showError("No appointments scheduled for today."); } else { document.getElementById("today-appts-section")?.scrollIntoView({ behavior:"smooth" }); } }},
-                    {label:"Pending items",value:pendingCount,bg:"#FAEEDA",color:"#633806",onClick:()=>setShowPendingSheet(true)},
-                    {label:"Requirements",value:`${totalRequired>0?Math.round((totalCompleted/totalRequired)*100):0}% done`,fontSize:19,bg:"#E1F5EE",color:"#085041",onClick:()=>{ setTab("goals"); setShowAllGoals(false); }},
-                  ].map(s=>(
-                    <div key={s.label} onClick={s.onClick} style={{ flex:1,background:s.bg,borderRadius:16,padding:"14px 10px",textAlign:"center",minWidth:0,cursor:"pointer",transition:"transform 0.1s" }}
-                      onMouseEnter={e=>e.currentTarget.style.transform="scale(1.03)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-                      <div style={{ fontSize:s.fontSize||26,fontWeight:700,color:s.color,fontFamily:"'Fraunces', serif",lineHeight:1 }}>{s.value}</div>
-                      <div style={{ fontSize:11,color:s.color,marginTop:5,opacity:0.85,lineHeight:1.3 }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
+                <div style={{ fontSize:13, color:"#a89cbd", marginBottom:18 }}>{new Date().toLocaleDateString("en-US",{ weekday:"long", month:"long", day:"numeric" })} · {patients.length} patient{patients.length!==1?"s":""}</div>
+                <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+  {[
+    {label:"Today's patients",value:todayPts.length,bg:"#EEEDFE",color:"#3C3489",onClick:()=>{ if(todayPts.length===0){ showError("No appointments scheduled for today."); } else { document.getElementById("today-appts-section")?.scrollIntoView({ behavior:"smooth" }); } }},
+    {label:"Pending items",value:pendingCount,bg:"#FAEEDA",color:"#633806",onClick:()=>setShowPendingSheet(true)},
+  ].map(s=>(
+    <div key={s.label} onClick={s.onClick} style={{ flex:1,background:s.bg,borderRadius:14,padding:"14px 14px",cursor:"pointer",transition:"transform 0.1s",minWidth:0 }}
+      onMouseEnter={e=>e.currentTarget.style.transform="scale(1.02)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+      <div style={{ fontSize:24,fontWeight:700,color:s.color,fontFamily:"'Fraunces',serif",lineHeight:1 }}>{s.value}</div>
+      <div style={{ fontSize:11,color:s.color,marginTop:5,opacity:0.85 }}>{s.label}</div>
+    </div>
+  ))}
+</div>
+{(() => {
+  const pct = totalRequired>0?Math.round((totalCompleted/totalRequired)*100):0;
+  return (
+    <div onClick={()=>{ setTab("goals"); setShowAllGoals(false); }} style={{ background:"linear-gradient(135deg,#534AB7 0%,#3C3489 100%)",borderRadius:18,padding:"18px 20px",marginBottom:18,cursor:"pointer",color:"white",boxShadow:"0 6px 24px rgba(83,74,183,0.20)",transition:"transform 0.1s" }}
+      onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
+      <div style={{ display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:14 }}>
+        <div>
+          <div style={{ fontSize:10,fontWeight:700,opacity:0.7,letterSpacing:"0.1em",marginBottom:6 }}>GRADUATION PROGRESS</div>
+          <div style={{ fontFamily:"'Fraunces',serif",fontSize:40,fontWeight:700,lineHeight:1,letterSpacing:"-0.02em" }}>
+            {pct}<span style={{ fontSize:22,opacity:0.55,marginLeft:2 }}>%</span>
+          </div>
+        </div>
+        <div style={{ textAlign:"right" }}>
+          <div style={{ fontSize:14,fontWeight:600,opacity:0.95 }}>{totalCompleted} <span style={{ opacity:0.6 }}>/ {totalRequired}</span></div>
+          <div style={{ fontSize:11,opacity:0.7,marginTop:2 }}>requirements complete</div>
+        </div>
+      </div>
+      <div style={{ height:8,borderRadius:4,background:"rgba(255,255,255,0.18)",overflow:"hidden" }}>
+        <div style={{ width:`${pct}%`,height:"100%",background:"linear-gradient(90deg,#a78bfa 0%,#5EEAD4 100%)",borderRadius:4,transition:"width 0.6s ease" }}/>
+      </div>
+    </div>
+  );
+})()}
                 <div style={{ background:nudge.bg,borderRadius:12,borderLeft:`3px solid ${nudge.border}`,padding:"14px 16px",marginBottom:24,display:"flex",alignItems:"flex-start",gap:12 }}>
                   <span style={{ fontSize:20,flexShrink:0,marginTop:1 }}>{nudge.icon}</span>
                   <div>
@@ -2771,11 +2924,11 @@ RESPONSE RULES:
                   {(()=>{ const pred=predictCompletion(patient); if(!pred||pred.daysOut===0) return null; return <div style={{ fontSize:12,color:"#b0a4c0",marginTop:3 }}>Est. completion ~{pred.date}</div>; })()}
                   <div style={{ marginTop:8,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
                     <span style={{ fontSize:12,padding:"4px 12px",borderRadius:99,background:meta.bg,color:meta.color,fontWeight:600 }}>{status}</span>
-                    {preAuthNudge&&<span style={{ fontSize:12,padding:"4px 12px",borderRadius:99,background:preAuthNudge.bg,color:preAuthNudge.color,fontWeight:600 }}>📄 {preAuthNudge.label}</span>}
-                    {labNudge&&<span style={{ fontSize:12,padding:"4px 12px",borderRadius:99,background:labNudge.bg,color:labNudge.color,fontWeight:600 }}>🧪 {labNudge.label}</span>}
+                    {preAuthNudge&&<span style={{ fontSize:12,padding:"4px 10px 4px 8px",borderRadius:99,background:preAuthNudge.bg,color:preAuthNudge.color,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>{preAuthNudge.label}</span>}
+                    {labNudge&&<span style={{ fontSize:12,padding:"4px 10px 4px 8px",borderRadius:99,background:labNudge.bg,color:labNudge.color,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2v6.5L3.5 17a3 3 0 0 0 2.6 4.5h11.8a3 3 0 0 0 2.6-4.5L15 8.5V2"/><path d="M8 2h8"/><path d="M7 16h10"/></svg>{labNudge.label}</span>}
                     <button onClick={()=>updateField(patient.id,"manualUrgent",!patient.manualUrgent)}
                       style={{ fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:99,border:"none",cursor:"pointer",fontFamily:"'Inter',sans-serif",background:patient.manualUrgent?"#fee2e2":"#f3f0f7",color:patient.manualUrgent?"#dc2626":"#9e8bb0",marginLeft:"auto",flexShrink:0 }}>
-                      {patient.manualUrgent?"✕ Remove Urgent Flag":"⚑ Flag as Urgent"}
+                      <span style={{ display:"inline-flex",alignItems:"center",gap:5 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">{patient.manualUrgent?<><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></>:<><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></>}</svg>{patient.manualUrgent?"Remove Urgent Flag":"Flag as Urgent"}</span>
                     </button>
                   </div>
                 </div>
@@ -2784,14 +2937,14 @@ RESPONSE RULES:
               {/* Urgency banner */}
               {urgency&&(
                 <div style={{ background:NYU.orangeLight,border:`1px solid #fed7aa`,borderRadius:14,padding:"12px 16px",marginBottom:16 }}>
-                  <div style={{ fontWeight:600,fontSize:13,color:NYU.orange,marginBottom:6 }}>⚠ Action Required</div>
+                  <div style={{ fontWeight:700,fontSize:13,color:NYU.orange,marginBottom:6,display:"flex",alignItems:"center",gap:7,letterSpacing:"0.01em" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>Action Required</div>
                   {urgency.map((r,i)=><div key={i} style={{ fontSize:12,color:NYU.gray600,marginTop:3 }}>· {r}</div>)}
                 </div>
               )}
 
               {/* Chart number — shown in detail for student reference */}
               <div style={{ background:T.lavender,borderRadius:14,padding:"12px 18px",marginBottom:16 }}>
-                <div style={{ fontSize:11,fontWeight:600,color:T.purple,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2 }}>Axium Chart Number <span style={{ fontSize:10,fontWeight:400,color:NYU.gray400 }}>(student reference only — not displayed externally)</span></div>
+                <div style={{ fontSize:11,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:2,display:"flex",alignItems:"center",gap:6 }}>Axium Chart Number <span style={{ fontSize:10,fontWeight:500,color:NYU.gray400,letterSpacing:"0.04em",textTransform:"none" }}>· Internal only</span></div>
                 <div style={{ fontSize:16,fontWeight:700,color:NYU.gray900,letterSpacing:"0.05em" }}>{patient.chartNumber}</div>
               </div>
 
@@ -3384,15 +3537,16 @@ RESPONSE RULES:
       )}
 
       {/* ── FLOATING AI BUTTON ── */}
-      <button className="float-right float-ai-btn" onClick={()=>setChatOpen(c=>!c)} style={{ position:"fixed",bottom:72,right:16,zIndex:2000,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},${T.purpleDark})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${T.purple}55`,fontSize:22 }} title="Ask AI">
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="9" stroke="white" strokeWidth="1.6"/><path d="M7.5 11h.02M11 11h.02M14.5 11h.02" stroke="white" strokeWidth="2.2" strokeLinecap="round"/></svg>
-      </button>
+      <button className="float-right float-ai-btn" onClick={()=>setChatOpen(c=>!c)} style={{ position:"fixed",bottom:72,right:16,zIndex:2000,height:48,padding:"0 16px 0 14px",borderRadius:24,background:`linear-gradient(135deg,${T.purple},${T.purpleDark})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:8,boxShadow:`0 6px 24px ${T.purple}55`,color:"white",fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:600 }} title="Ask the ClinIQ AI assistant">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>
+  Ask AI
+</button>
 
       {/* ── BOTTOM NAV ── */}
       <div className="bottom-nav" style={{ position:"fixed",bottom:0,left:0,right:0,height:56,background:"white",borderTop:"1px solid #f3f0f7",alignItems:"center",zIndex:1000,boxShadow:"0 -2px 12px rgba(83,74,183,0.07)" }}>
         {[
           {key:"overview",   icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="5" width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="9.25" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="13.5" width="7" height="1.5" rx="0.75" fill="currentColor"/></svg>, label:"Overview"},
-          {key:"directory",  icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="7.5" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.4"/><path d="M2 17c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M13 6.5c1.5 0 2.5 1 2.5 2.5S14.5 11.5 13 11.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M16.5 17c0-2-1-3.5-2.5-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>, label:"Directory"},
+          {key:"roster",  icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="6.5" r="3" stroke="currentColor" strokeWidth="1.4"/><path d="M3.5 17c0-3.5 2.5-6 6.5-6s6.5 2.5 6.5 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>, label:"Patients"},
           {key:"goals",      icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3l1.8 3.6L16 7.3l-3 2.9.7 4.1L10 12.1 6.3 14.3l.7-4.1-3-2.9 4.2-.7L10 3z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>, label:"Goals"},
           {key:"calendar",   icon:<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M3 8h14" stroke="currentColor" strokeWidth="1.4"/><path d="M7 2v3M13 2v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>, label:"Calendar"},
         ].map(t=>{
@@ -4096,12 +4250,12 @@ RESPONSE RULES:
       {/* ── GUIDED TOUR OVERLAY ── */}
       {tourStep!==null&&(()=>{
         const steps=[
-          { icon:"🏠", title:"Overview", body:"The Overview tab is your daily command center: greeting, today's appointments, stat chips, nudges, and behavioral insights all in one scroll." },
-          { icon:"👥", title:"Directory", body:"The Directory tab stores your attendings, partners, and specialists. Tap any card to edit their info, or tap + Add Provider to create a new entry." },
+          { icon:"🏠", title:"Overview", body:"The Overview tab is your daily command center: greeting, stat chips, your live graduation progress, today's appointments, and behavioral nudges — all in one scroll." },
+          { icon:"👥", title:"Provider Directory", body:"Access your faculty, residents, paired student providers, and specialists from the hamburger menu under Provider Directory. Tap any card to edit their info, or tap + Add Provider to create a new entry." },
           { icon:"⭐", title:"Goals", body:"Goals shows your graduation requirement progress grouped by status. Green = done, amber = in progress. Tap a discipline to go to patients in that specialty." },
           { icon:"📅", title:"Calendar", body:"Calendar shows upcoming appointments and external rotations in a monthly view. Tap any day to see or schedule appointments." },
-          { icon:"🔢", title:"Stat chips", body:"The three chips at the top of Overview are tappable: Today's Patients scrolls down to your schedule, Pending opens a priority list, and Requirements jumps to Goals." },
-          { icon:"💬", title:"AI Assistant", body:"Tap the AI button (bottom-right) to open the AI assistant. Ask anything: it knows your entire caseload, requirements, and clinical protocols." },
+          { icon:"🔢", title:"Stats & progress", body:"Two chips at the top show Today's Patients (taps to your schedule) and Pending Items (taps to your priority list). Below them: your live Graduation Progress card with a real-time percentage and progress bar — tap it to jump to Goals." },
+          { icon:"💬", title:"AI Assistant", body:"Tap the Ask AI pill (bottom-right) to open your assistant. Ask anything — it knows your entire caseload, graduation requirements, and clinical protocols, and it can suggest priorities for today." },
           { icon:"📓", title:"Notebook & Roster", body:"Access your clinical notebook and full patient roster from the hamburger menu (top-left). Use the roster search to filter by alias, chart number, or procedure." },
           { icon:"🎓", title:"You're all set!", body:"ClinIQ is built to grow with your caseload. Add patients, log visits, and let AI help you stay on track for graduation. Good luck!" },
         ];
