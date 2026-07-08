@@ -616,4 +616,49 @@ Build: PASS (vite, 30 modules)
 
 ### Branch and commit hash
 
-To be filled after commit.
+`ec3e45e` on `autonomous/sprint-1`
+
+---
+
+## Task 007 — Delete .replit (2026-07-08)
+
+- **Date/time:** 2026-07-08T02:25:00Z
+- **Branch:** `autonomous/sprint-1`
+- **Task name:** Remove final Replit scaffolding file
+- **Objective:** Delete `.replit` now that owner has confirmed Replit is not the deployment target.
+
+### Changes made
+
+- `.replit` — deleted (`git rm`). Confirmed by owner that Replit is not the deployment target. File contained autoscale deployment config, run/build commands, and workflow definitions that are no longer relevant.
+
+### Files deleted
+
+- `.replit`
+
+### Build result
+
+```
+npm run build → vite v7.3.6, 31 modules, 835ms — PASS
+```
+
+### Test result
+
+```
+npm test → 20/20 pass — PASS
+```
+
+### Technical debt removed
+
+- `.replit` — final dead Replit scaffolding file. All four Replit leftovers (`main.py`, `pyproject.toml`, `replit.md`, `.replit`) are now removed.
+
+### Technical debt introduced
+
+None.
+
+### Suggested git commit message
+
+```
+chore: delete .replit (Replit is not the deployment target)
+
+Tests: PASS (20/20) | Build: PASS (31 modules)
+```
