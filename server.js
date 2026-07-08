@@ -6,6 +6,8 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import bcrypt from 'bcryptjs';
 import pool, { initDb } from './db.js';
+import workflowRoutes from './server/routes/workflowRoutes.js';
+import { buildWorkflowDashboardSummary } from './server/services/workflow/workflowSummaryService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -31,6 +33,8 @@ const requireAuth = (req, res, next) => {
   if (!req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   next();
 };
+
+app.use('/api/workflow', workflowRoutes);
 
 // ── Auth routes ──────────────────────────────────────────────────────────────
 
@@ -837,6 +841,71 @@ app.get('/api/settings', requireAuth, async (req, res) => {
     res.json({ graduationDate: s.graduation_date, customGoals: s.custom_goals || [], clinicSchedule: s.clinic_schedule || {} });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load settings' });
+  }
+});
+
+app.get('/api/v2/dashboard/summary', requireAuth, async (req, res) => {
+  try {
+    const [patientsResult, visitsResult] = await Promise.all([
+      pool.query(
+        `SELECT id, alias, chart_number, procedure, last_visit, treatment_start, expected_completion,
+                next_appt, next_appt_time, treatment_complete, lab_status, lab_sent_date,
+                lab_received_date, pre_auth, pre_auth_submitted_date, notes, handoff_partner,
+                handoff_notes, patient_language, is_primary_provider, shared_with_d3
+         FROM patients
+         WHERE user_id = $1
+         ORDER BY created_at ASC`,
+        [req.session.userId]
+      ),
+      pool.query(
+        `SELECT vl.patient_id, vl.visit_date
+         FROM visit_logs vl
+         JOIN patients p ON vl.patient_id = p.id
+         WHERE p.user_id = $1
+         ORDER BY vl.visit_date ASC`,
+        [req.session.userId]
+      ),
+    ]);
+
+    const patients = patientsResult.rows.map((patient) => ({
+      id: patient.id,
+      alias: patient.alias,
+      chartNumber: patient.chart_number,
+      procedure: patient.procedure,
+      lastVisit: patient.last_visit,
+      treatmentStart: patient.treatment_start,
+      expectedCompletion: patient.expected_completion,
+      nextAppt: patient.next_appt,
+      nextApptTime: patient.next_appt_time,
+      treatmentComplete: patient.treatment_complete,
+      labStatus: patient.lab_status,
+      labSentDate: patient.lab_sent_date,
+      labReceivedDate: patient.lab_received_date,
+      preAuth: patient.pre_auth,
+      preAuthSubmittedDate: patient.pre_auth_submitted_date,
+      notes: patient.notes,
+      handoffPartner: patient.handoff_partner,
+      handoffNotes: patient.handoff_notes,
+      patientLanguage: patient.patient_language,
+      isPrimaryProvider: patient.is_primary_provider !== false,
+      sharedWithD3: patient.shared_with_d3 || false,
+    }));
+
+    const visits = visitsResult.rows.map((visit) => ({
+      patient_id: visit.patient_id,
+      visit_date: visit.visit_date,
+    }));
+
+    const summary = buildWorkflowDashboardSummary({
+      patients,
+      visits,
+      now: new Date(),
+    });
+
+    res.json(summary);
+  } catch (err) {
+    console.error('Dashboard summary error:', err.message);
+    res.status(500).json({ error: 'Failed to build workflow summary' });
   }
 });
 
