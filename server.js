@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import pool, { initDb } from './db.js';
 import workflowRoutes from './server/routes/workflowRoutes.js';
 import { buildWorkflowDashboardSummary } from './server/services/workflow/workflowSummaryService.js';
+import { buildCaseIntelligenceSummary } from './server/services/caseIntelligence/caseIntelligenceService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -898,6 +899,65 @@ app.get('/api/v2/dashboard/summary', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Dashboard summary error:', err.message);
     res.status(500).json({ error: 'Failed to build workflow summary' });
+  }
+});
+
+app.get('/api/v2/patients/:id/summary', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [patientResult, visitsResult] = await Promise.all([
+      pool.query(
+        `SELECT id, alias, chart_number, procedure, last_visit, treatment_start, expected_completion,
+                next_appt, treatment_complete, lab_status, lab_sent_date, lab_received_date,
+                pre_auth, notes, handoff_partner, handoff_notes, is_primary_provider, shared_with_d3
+         FROM patients
+         WHERE id = $1 AND user_id = $2`,
+        [id, req.session.userId]
+      ),
+      pool.query(
+        `SELECT vl.patient_id, vl.visit_date
+         FROM visit_logs vl
+         WHERE vl.patient_id = $1`,
+        [id]
+      ),
+    ]);
+
+    if (!patientResult.rows[0]) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    const row = patientResult.rows[0];
+    const patient = {
+      id: row.id,
+      alias: row.alias,
+      chartNumber: row.chart_number,
+      procedure: row.procedure,
+      lastVisit: row.last_visit,
+      treatmentStart: row.treatment_start,
+      expectedCompletion: row.expected_completion,
+      nextAppt: row.next_appt,
+      treatmentComplete: row.treatment_complete,
+      labStatus: row.lab_status,
+      labSentDate: row.lab_sent_date,
+      labReceivedDate: row.lab_received_date,
+      preAuth: row.pre_auth,
+      notes: row.notes,
+      handoffPartner: row.handoff_partner,
+      handoffNotes: row.handoff_notes,
+      isPrimaryProvider: row.is_primary_provider !== false,
+      sharedWithD3: row.shared_with_d3 || false,
+    };
+
+    const visits = visitsResult.rows.map((v) => ({
+      patient_id: v.patient_id,
+      visit_date: v.visit_date,
+    }));
+
+    const summary = buildCaseIntelligenceSummary({ patient, visits, now: new Date() });
+    res.json(summary);
+  } catch (err) {
+    console.error('Case intelligence error:', err.message);
+    res.status(500).json({ error: 'Failed to build case summary' });
   }
 });
 

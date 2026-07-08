@@ -305,3 +305,98 @@ Add a new deterministic per-patient case summary endpoint in a new
 `server/services/caseIntelligence/` module. Returns structured status, risk level,
 next-step indicators. No Claude calls. Keeps `server.js` thin.
 Maps to ENGINEERING_BACKLOG.md Task 1.2.2.
+
+---
+
+## Task 004 — Sprint 1: Case Intelligence Service + Endpoint (2026-07-08)
+
+- **Date/time:** 2026-07-08T01:10:00Z
+- **Branch:** `autonomous/sprint-1`
+- **Task name:** Case Intelligence — deterministic per-patient case summary
+- **Objective:** Implement ENGINEERING_BACKLOG.md Task 1.2.1 + 1.2.2 (Case Intelligence View — define payload + add endpoint). No AI/LLM calls. Pure deterministic service, fully tested.
+
+### New files created
+
+- `server/services/caseIntelligence/caseIntelligenceService.js`
+  - Pure export: `buildCaseIntelligenceSummary({ patient, visits, now })`
+  - Derives: `timeline` (7 date fields + delta days), `status` (6 fields), `riskFlags` (array of `{ flag, label, severity }`), `riskLevel` (High/Medium/Low/None), `nextSteps` (array of strings), `visitCount`
+  - Risk flags: appointment_today, appointment_soon, insurance_denied, insurance_pending, lab_delay, lab_pending, inactivity_high, inactivity_medium, timeline_overdue, handoff_pending, notes_urgent
+  - Handles TEXT date fields from DB via `normalizeDate()` (same pattern as workflowSummaryService)
+
+- `server/services/caseIntelligence/caseIntelligenceService.test.js`
+  - 16 tests covering all risk flags, timeline derivation, visit counting, edge cases
+  - Fixed reference date (2026-07-08T00:00:00Z) for determinism
+
+### Files modified
+
+- `server.js`
+  - Import: `buildCaseIntelligenceSummary` from `caseIntelligenceService.js`
+  - New route: `GET /api/v2/patients/:id/summary` (requireAuth, scoped by user_id)
+  - Route is a thin DB-query + service-call; all business logic stays in the service
+
+### Architecture decisions
+
+- **Separate service directory** (`server/services/caseIntelligence/`) — follows the same pattern as `server/services/workflow/`, keeps monolith thin
+- **v2 API namespace** — consistent with `GET /api/v2/dashboard/summary`; avoids conflicts with existing `GET /api/patients/:id`
+- **No frontend changes yet** — Task 1.2.3 (case overview UI) is deferred; the endpoint is ready for consumption
+- **User scoping** — the DB query enforces `AND user_id = $1` on the patient lookup; a 404 is returned if the patient belongs to a different user (no data leakage)
+
+### Build result
+
+```
+npm run build → vite v7.3.6, 30 modules, 781ms — PASS
+```
+
+### Test result
+
+```
+npm test → 20/20 pass (16 new case intelligence + 4 existing workflow)
+```
+
+### Technical debt removed
+
+- ENGINEERING_BACKLOG.md Tasks 1.2.1 and 1.2.2 — both complete (payload defined + endpoint live)
+
+### Technical debt introduced
+
+- Task 1.2.3 (case overview UI component) — deferred; endpoint is available but not yet surfaced in the frontend
+- `/api/parse-note` still uses its own inline model string — should use `ALLOWED_MODEL`; noted in Task 003
+
+### Known issues remaining
+
+1. 🟠 `SESSION_SECRET` insecure hardcoded fallback (unchanged)
+2. 🟠 Login silently auto-registers unknown emails (unchanged)
+3. 🟡 Dead Replit scaffolding still tracked
+4. 🟡 Unused deps: `cors`, `concurrently`
+5. 🟡 Task 1.2.3 UI not yet built
+
+### git status before commit
+
+```
+On branch autonomous/sprint-1
+Changes not staged for commit:
+  modified:   _PROJECT_DOCS/IMPLEMENTATION_LOG.md
+  modified:   server.js
+
+Untracked files:
+  server/services/caseIntelligence/
+```
+
+### Suggested git commit message
+
+```
+feat(sprint-1): add case intelligence service + GET /api/v2/patients/:id/summary
+
+- New: server/services/caseIntelligence/caseIntelligenceService.js
+  deterministic per-patient case summary (risk flags, timeline, next steps)
+- New: caseIntelligenceService.test.js — 16 tests, all pass
+- server.js: import + thin route GET /api/v2/patients/:id/summary (requireAuth)
+
+Implements ENGINEERING_BACKLOG.md Task 1.2.1 + 1.2.2
+Tests: PASS (20/20 total — 16 new + 4 existing)
+Build: PASS (vite, 30 modules)
+```
+
+### Branch and commit hash
+
+To be filled after commit.
