@@ -977,6 +977,8 @@ app.put('/api/settings', requireAuth, async (req, res) => {
 });
 
 // ── AI routes ─────────────────────────────────────────────────────────────────
+// Model is fixed server-side; both AI proxy routes reference this constant.
+const ALLOWED_MODEL = 'claude-sonnet-4-20250514';
 
 app.post('/api/parse-note', requireAuth, async (req, res) => {
   try {
@@ -984,7 +986,7 @@ app.post('/api/parse-note', requireAuth, async (req, res) => {
     if (!note || !note.trim()) return res.status(400).json({ error: 'Note text is required' });
     const todayStr = new Date().toISOString().split('T')[0];
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: ALLOWED_MODEL,
       max_tokens: 1000,
       messages: [{
         role: 'user',
@@ -1005,9 +1007,7 @@ Note: "${note}"`
   }
 });
 
-// Model is fixed server-side to prevent the open relay from being used with
-// arbitrary models. Callers may still pass messages/system/max_tokens.
-const ALLOWED_MODEL = 'claude-sonnet-4-20250514';
+// Callers may still pass messages/system/max_tokens.
 app.post('/api/parse', requireAuth, async (req, res) => {
   try {
     const { max_tokens, messages, system } = req.body;

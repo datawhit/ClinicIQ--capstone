@@ -419,6 +419,112 @@ To be filled after commit.
 
 **Sprint 1 Epic 1 is complete.** Epic 2 (AI Guidance — Task 2.1) is deferred per autonomous mode instructions ("Do not add AI recommendations yet").
 
+---
+
+## Task 006 — Pre-Merge Cleanup (2026-07-08)
+
+- **Date/time:** 2026-07-08T02:10:00Z
+- **Branch:** `autonomous/sprint-1`
+- **Task name:** Pre-merge cleanup — ALLOWED_MODEL consolidation, dead file removal, unused dep removal
+- **Objective:** Complete the optional cleanup items identified in SPRINT_1_REVIEW.md before merging Sprint 1 into main. No new product functionality.
+
+### Changes made
+
+**1. Consolidated `ALLOWED_MODEL` constant (server.js)**
+- Moved `const ALLOWED_MODEL = 'claude-sonnet-4-20250514'` to the top of the AI routes section, before `POST /api/parse-note`.
+- Replaced the inline `model: 'claude-sonnet-4-20250514'` string in `/api/parse-note` with `model: ALLOWED_MODEL`.
+- Result: one declaration, two usages. The model string no longer appears more than once anywhere in the file.
+- No behavioral change — both routes used the same value before.
+
+**2. Deleted dead Replit/Python scaffolding**
+- `main.py` — deleted (`git rm`). Was `def main(): print("Hello from repl-nix-workspace!")` — inert.
+- `pyproject.toml` — deleted (`git rm`). Was empty Replit Python project scaffold. No dependencies. Unused.
+- `replit.md` — deleted (`git rm`). Described "early-stage project with only Vite configured" — completely obsolete and misleading.
+- **`.replit` — SKIPPED.** Contains real deployment configuration (`deploymentTarget = "autoscale"`, `run = ["node", "server.js"]`, `build = ["npm", "run", "build"]`). Cannot confirm whether Replit is still the active deployment target. Deleting it could break a live deployment. Left in place pending owner confirmation.
+
+**3. Removed unused dependencies**
+- Removed `cors` (^2.8.6) from `package.json` — confirmed not imported in `server.js`, `server/`, or `src/`.
+- Removed `concurrently` (^9.2.1) from `package.json` — confirmed not used in any npm script or source file.
+- Ran `npm install` — removed 26 transitive packages (cors + concurrently + their deps).
+- `package-lock.json` updated accordingly.
+
+**4. Added `SPRINT_1_REVIEW.md` to commit**
+- Created in previous review step but not yet staged. Staged here.
+
+### Files modified
+
+- `server.js` — `ALLOWED_MODEL` moved + inline string replaced in `/api/parse-note`
+- `package.json` — 2 deps removed
+- `package-lock.json` — 26 packages pruned
+
+### Files deleted (from git tracking and disk)
+
+- `main.py`
+- `pyproject.toml`
+- `replit.md`
+
+### Files added
+
+- `_PROJECT_DOCS/SPRINT_1_REVIEW.md` — staged for first commit here
+
+### Build result
+
+```
+npm run build → vite v7.3.6, 31 modules, 832ms — PASS
+```
+
+### Test result
+
+```
+npm test → 20/20 pass — PASS
+```
+
+### Technical debt removed
+
+- Inline model string in `/api/parse-note` (was inconsistent with `/api/parse`)
+- `main.py`, `pyproject.toml`, `replit.md` — dead Replit scaffolding
+- `cors`, `concurrently` — 2 unused direct dependencies + 24 transitive packages
+
+### Technical debt introduced
+
+None.
+
+### Remaining items (acknowledged, not resolved in this task)
+
+- `.replit` — not deleted; requires owner confirmation that Replit is no longer the deploy target
+- `SESSION_SECRET` insecure fallback — deferred to Sprint 2 (requires fail-fast production guard)
+- Login silent auto-register — product policy decision pending
+
+### git status before commit
+
+```
+D  main.py
+M  package-lock.json
+M  package.json
+D  pyproject.toml
+D  replit.md
+M  server.js
+?? _PROJECT_DOCS/SPRINT_1_REVIEW.md
+```
+
+### Suggested git commit message
+
+```
+chore: pre-merge cleanup — consolidate ALLOWED_MODEL, remove dead files and unused deps
+
+- server.js: move ALLOWED_MODEL before /api/parse-note; use it in both AI routes
+- Delete main.py, pyproject.toml, replit.md (inert Replit scaffolding)
+- package.json: remove unused cors and concurrently (+ 24 transitive packages)
+- Add SPRINT_1_REVIEW.md
+
+.replit retained: deployment config; skip pending owner confirmation
+Tests: PASS (20/20) | Build: PASS (31 modules)
+```
+
+### Branch and commit hash
+
+To be filled after commit.
+
 ## Task 004 — Sprint 1: Case Intelligence Service + Endpoint (2026-07-08)
 
 - **Date/time:** 2026-07-08T01:10:00Z
