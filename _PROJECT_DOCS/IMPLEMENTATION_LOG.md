@@ -308,6 +308,117 @@ Maps to ENGINEERING_BACKLOG.md Task 1.2.2.
 
 ---
 
+## Task 005 — Sprint 1: CaseIntelligenceSummary UI Component (2026-07-08)
+
+- **Date/time:** 2026-07-08T01:35:00Z
+- **Branch:** `autonomous/sprint-1`
+- **Task name:** Task 1.2.3 — Case overview experience (UI component)
+- **Objective:** Implement the React component that surfaces the deterministic case summary inside the existing patient detail view without rewriting App.jsx.
+
+### Files created
+
+- `src/components/CaseIntelligenceSummary.jsx`
+  - Fetches `GET /api/v2/patients/:id/summary` on mount, re-fetches when `patientId` changes
+  - Props: `patientId` (string), `theme` (object — active color theme from App.jsx)
+  - States: loading → skeleton row; error → amber inline message (non-blocking); empty (riskLevel=None) → "No active flags" badge; data → expanded risk flags + next steps + timeline grid
+  - Collapsible card: collapsed shows risk badge + top next step; expanded shows all flags, all next steps, 4-field timeline grid
+  - Color-coded by severity: High=red, Medium=amber, Low=blue (flags); High/Medium/Low/None for risk level badge
+  - `patientId` URL-encoded in fetch (`encodeURIComponent`) to be safe with prefixed IDs
+  - Cleanup: uses `active` boolean flag to prevent state updates after unmount (same pattern as DailyPrioritySummary)
+
+### Files modified
+
+- `src/App.jsx`
+  - Added import: `import CaseIntelligenceSummary from "./components/CaseIntelligenceSummary.jsx"`
+  - Added render: `<CaseIntelligenceSummary patientId={patient.id} theme={T} />` just above the existing `{/* Visit History */}` section (line 3127)
+  - **Two lines added — nothing else changed**
+
+### Architecture decisions
+
+- **Isolated component** — no new state in App.jsx, no prop drilling of summary data. The component owns its own fetch lifecycle.
+- **Collapsible by default** — collapsed view shows risk badge + the single most urgent next step; the user can expand for full detail. This is the minimum useful UI slice.
+- **Non-blocking error** — if the summary endpoint fails (e.g. no DB in dev with no env vars), the card shows a muted error message. The rest of the patient detail panel continues to function.
+- **Not shown when loading** — a skeleton placeholder is shown; the card appears in place so the layout doesn't shift.
+- **Consistent visual language** — card styling matches existing white/rounded/border pattern in the detail view. Colors reuse the app's existing severity palette.
+
+### Build result
+
+```
+npm run build → vite v7.3.6
+✓ 31 modules transformed (30→31, new component bundled)
+dist/assets/index-CUrnvngB.js  458.26 kB │ gzip: 120.60 kB
+✓ built in 834ms — PASS
+```
+
+### Test result
+
+```
+npm test → 20/20 pass (unchanged — no server-side logic changed)
+```
+
+### Technical debt removed
+
+- ENGINEERING_BACKLOG.md Task 1.2.3 — case overview experience — complete
+
+### Technical debt introduced
+
+None.
+
+### Known issues remaining
+
+1. 🟠 `SESSION_SECRET` insecure hardcoded fallback (unchanged — Sprint 2 scope)
+2. 🟠 Login silently auto-registers unknown emails (unchanged)
+3. 🟡 Dead Replit scaffolding tracked: `main.py`, `pyproject.toml`, `replit.md`, `.replit`
+4. 🟡 Unused deps: `cors`, `concurrently`
+5. 🟡 `/api/parse-note` still has its own inline model string; should use `ALLOWED_MODEL`
+6. 🟡 Sprint 2 items from ENGINEERING_BACKLOG.md not yet started
+
+### git status before commit
+
+```
+On branch autonomous/sprint-1
+Changes not staged for commit:
+  modified:   _PROJECT_DOCS/IMPLEMENTATION_LOG.md
+  modified:   src/App.jsx
+
+Untracked files:
+  src/components/CaseIntelligenceSummary.jsx
+```
+
+### Suggested git commit message
+
+```
+feat(sprint-1): CaseIntelligenceSummary UI component (Task 1.2.3)
+
+- New: src/components/CaseIntelligenceSummary.jsx
+  collapsible card in patient detail panel; fetches /api/v2/patients/:id/summary
+  states: loading, error, riskLevel=None, data (flags + next steps + timeline)
+- src/App.jsx: +1 import, +1 render above Visit History section
+
+Completes Sprint 1 Epic 1.2 (Case Intelligence View) end-to-end
+Tests: PASS (20/20)
+Build: PASS (31 modules, 834ms)
+```
+
+### Branch and commit hash
+
+To be filled after commit.
+
+---
+
+### Sprint 1 Status
+
+| Epic | Task | Status |
+|---|---|---|
+| 1.1 Daily Priority | 1.1.1 Priority scoring model | ✅ (priorityService.js) |
+| 1.1 Daily Priority | 1.1.2 Daily summary service | ✅ (workflowSummaryService.js) |
+| 1.1 Daily Priority | 1.1.3 Daily command center UI | ✅ (DailyPrioritySummary.jsx) |
+| 1.2 Case Intelligence | 1.2.1 Case intelligence payload | ✅ (caseIntelligenceService.js) |
+| 1.2 Case Intelligence | 1.2.2 Case summary endpoint | ✅ (GET /api/v2/patients/:id/summary) |
+| 1.2 Case Intelligence | 1.2.3 Case overview UI | ✅ (CaseIntelligenceSummary.jsx) |
+
+**Sprint 1 Epic 1 is complete.** Epic 2 (AI Guidance — Task 2.1) is deferred per autonomous mode instructions ("Do not add AI recommendations yet").
+
 ## Task 004 — Sprint 1: Case Intelligence Service + Endpoint (2026-07-08)
 
 - **Date/time:** 2026-07-08T01:10:00Z

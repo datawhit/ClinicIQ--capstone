@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import DailyPrioritySummary from "./components/DailyPrioritySummary.jsx";
+import CaseIntelligenceSummary from "./components/CaseIntelligenceSummary.jsx";
 
 const NYU = {
   purple: "#6B21A8",
@@ -3121,6 +3122,9 @@ RESPONSE RULES:
                 </div>
                 </div>}
               </div>
+
+              {/* Case Intelligence */}
+              <CaseIntelligenceSummary patientId={patient.id} theme={T} />
 
               {/* Visit History */}
               <div style={{ background:"white",borderRadius:16,marginBottom:16,border:`1px solid ${NYU.gray100}`,overflow:"hidden" }}>
