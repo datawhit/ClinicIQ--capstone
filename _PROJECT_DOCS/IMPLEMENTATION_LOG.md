@@ -199,3 +199,109 @@ Add `GET /api/patients/:id/summary` — a deterministic per-patient case summary
 module. No Claude calls; pure data derivation like the priority service.
 
 Recommendation: A first, then B.
+
+---
+
+## Task 003 — Security: Gate AI Proxy Routes + Disable Insecure Password Reset (2026-07-08)
+
+- **Date/time:** 2026-07-08T00:45:00Z
+- **Branch:** `autonomous/sprint-1`
+- **Task name:** Fix AUDIT.md 🔴 security risks #1 and #2
+- **Objective:** Close the two highest-severity security issues before any further Sprint 1 work.
+
+### Changes made (server.js only)
+
+**1. Disabled unauthenticated password reset (`POST /api/auth/reset-password`)**
+- Risk: Anyone who knows a user's email can reset their password and seize their account.
+- Fix: Route now returns 501 with a clear message. No DB access. No bcrypt.
+- Rationale: "or disable the route" is explicitly offered in AUDIT.md §6 risk #1. There is no email-sending infrastructure, so a token/challenge flow cannot be built without new dependencies. Disabling is the correct interim fix.
+- Frontend impact: The "Forgot Password" form will display the server's error message ("Password reset is not available in this version..."). No App.jsx changes needed — the existing error display already handles server errors gracefully.
+
+**2. Added `requireAuth` to `POST /api/parse-note`**
+- Risk: Unauthenticated users could call the NLP note parser, running up Anthropic costs.
+- Fix: Added `requireAuth` middleware as the second argument. One character change.
+- Frontend impact: None. The frontend only calls this from the Log Visit modal, which is only reachable when logged in.
+
+**3. Added `requireAuth` + model lockdown to `POST /api/parse`**
+- Risk: Unauthenticated, unbounded open relay to Anthropic — any model, any content.
+- Fix: Added `requireAuth`. Removed the caller-controlled `model` parameter; replaced with server-side `const ALLOWED_MODEL = 'claude-sonnet-4-20250514'`. Callers can still pass `messages`, `system`, and `max_tokens`.
+- Frontend impact: None. `App.jsx` already passes the same model string. Since the server now ignores it, the frontend `model` field in the body is silently dropped (harmless).
+- Additional benefit: `ALLOWED_MODEL` is now a single named constant — resolves the "hardcoded model in two places" note from AUDIT.md (the route no longer passes it from client; only `server.js` declares it). The `/api/parse-note` route still has its own inline model string — that's acceptable, tracked as remaining debt.
+
+### Files modified
+
+- `server.js` — 3 targeted changes (12 insertions, 17 deletions net)
+
+### Files created / deleted
+
+None.
+
+### Build result
+
+```
+npm run build → vite v7.3.6
+✓ 30 modules transformed, built in 814ms — PASS
+```
+
+### Test result
+
+```
+npm test → 4/4 pass — PASS
+```
+
+### Technical debt removed
+
+- 🔴 Unauthenticated password reset (account takeover vector) — disabled
+- 🔴 Unauthenticated, unbounded Claude proxy `/api/parse` — gated + model locked
+- 🔴 Unauthenticated Claude proxy `/api/parse-note` — gated
+- Caller-controlled model parameter on `/api/parse` — removed
+
+### Technical debt introduced
+
+- `/api/parse-note` still has its own inline model string (`claude-sonnet-4-20250514`) — should use `ALLOWED_MODEL` constant. Low risk; left for next cleanup pass.
+- Password reset is disabled, not replaced — a proper reset flow (email token) is a future task.
+
+### Known issues remaining (from AUDIT.md)
+
+1. 🟠 `SESSION_SECRET` insecure hardcoded fallback (unchanged)
+2. 🟠 Login silently auto-registers any unknown email (unchanged)
+3. 🟡 Dead Replit scaffolding still tracked (`main.py`, `pyproject.toml`, `replit.md`, `.replit`)
+4. 🟡 Unused deps: `cors`, `concurrently`
+
+### git status before commit
+
+```
+On branch autonomous/sprint-1
+Changes not staged for commit:
+  modified:   server.js
+```
+
+### Suggested git commit message
+
+```
+fix: gate AI proxy routes with requireAuth; disable insecure password reset
+
+- POST /api/parse: add requireAuth + lock model to ALLOWED_MODEL constant
+  (closes open Anthropic relay — AUDIT.md risk #2)
+- POST /api/parse-note: add requireAuth
+  (closes unauthenticated NLP proxy — AUDIT.md risk #2)
+- POST /api/auth/reset-password: return 501 (disabled)
+  (closes account-takeover vector — AUDIT.md risk #1)
+
+Tests: PASS (4/4)
+Build: PASS (vite, 30 modules)
+```
+
+### Branch and commit hash
+
+To be filled after commit.
+
+---
+
+### Next recommended task (Task 004)
+
+**Sprint 1 Case Intelligence — `GET /api/patients/:id/summary`**
+Add a new deterministic per-patient case summary endpoint in a new
+`server/services/caseIntelligence/` module. Returns structured status, risk level,
+next-step indicators. No Claude calls. Keeps `server.js` thin.
+Maps to ENGINEERING_BACKLOG.md Task 1.2.2.

@@ -95,19 +95,11 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/reset-password', async (req, res) => {
-  const { email, newPassword } = req.body;
-  if (!email || !newPassword) return res.status(400).json({ error: 'Missing fields' });
-  try {
-    const result = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
-    if (!result.rows[0]) return res.status(404).json({ error: 'No account found with that email' });
-    const hash = await bcrypt.hash(newPassword, 10);
-    await pool.query('UPDATE users SET password_hash = $1 WHERE email = $2', [hash, email.toLowerCase()]);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('Reset error:', err.message);
-    res.status(500).json({ error: 'Reset failed' });
-  }
+// Password reset disabled: no email verification infrastructure exists.
+// Allowing unauthenticated password changes by email alone is an account-takeover risk.
+// See AUDIT.md §6 risk #1. Re-enable only after adding token/email challenge.
+app.post('/api/auth/reset-password', (req, res) => {
+  res.status(501).json({ error: 'Password reset is not available in this version. Use the demo account or contact your administrator.' });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -926,7 +918,7 @@ app.put('/api/settings', requireAuth, async (req, res) => {
 
 // ── AI routes ─────────────────────────────────────────────────────────────────
 
-app.post('/api/parse-note', async (req, res) => {
+app.post('/api/parse-note', requireAuth, async (req, res) => {
   try {
     const { note } = req.body;
     if (!note || !note.trim()) return res.status(400).json({ error: 'Note text is required' });
@@ -953,10 +945,13 @@ Note: "${note}"`
   }
 });
 
-app.post('/api/parse', async (req, res) => {
+// Model is fixed server-side to prevent the open relay from being used with
+// arbitrary models. Callers may still pass messages/system/max_tokens.
+const ALLOWED_MODEL = 'claude-sonnet-4-20250514';
+app.post('/api/parse', requireAuth, async (req, res) => {
   try {
-    const { model, max_tokens, messages, system } = req.body;
-    const params = { model: model || 'claude-sonnet-4-20250514', max_tokens: max_tokens || 1000, messages: messages || [] };
+    const { max_tokens, messages, system } = req.body;
+    const params = { model: ALLOWED_MODEL, max_tokens: max_tokens || 1000, messages: messages || [] };
     if (system) params.system = system;
     const message = await anthropic.messages.create(params);
     res.json(message);
