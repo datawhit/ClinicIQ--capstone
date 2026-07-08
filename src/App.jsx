@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import DailyPrioritySummary from "./components/DailyPrioritySummary.jsx";
 
 const NYU = {
   purple: "#6B21A8",
@@ -1798,6 +1799,7 @@ RESPONSE RULES:
                     <div style={{ fontSize:12,color:nudge.text,opacity:0.8,lineHeight:1.4 }}>{nudge.desc}</div>
                   </div>
                 </div>
+                <DailyPrioritySummary theme={T} />
                 {showWeeklyToast&&(
                   <div style={{ background:"linear-gradient(135deg,#534AB7,#3C3489)",borderRadius:16,padding:"16px 18px",marginBottom:20,display:"flex",alignItems:"flex-start",gap:12,boxShadow:"0 4px 20px rgba(83,74,183,0.25)" }}>
                     <span style={{ fontSize:20,flexShrink:0 }}>📋</span>
